@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <OutputType>Library</OutputType>
+    <AssemblyName>SimplifiedDataExporter</AssemblyName>
+    <RootNamespace>AtasCustomIndicators</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="ATAS Indicators">
+      <HintPath>..\..\external\ATAS Indicators.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+</Project>
