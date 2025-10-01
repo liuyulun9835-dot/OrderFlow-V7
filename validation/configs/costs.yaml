@@ -1,0 +1,12 @@
+base:
+  fee_rate: 0.0004
+  spread_bps: 5
+  slippage_bps: 5
+plus50:
+  fee_rate: 0.0006
+  spread_bps: 8
+  slippage_bps: 8
+double:
+  fee_rate: 0.0008
+  spread_bps: 10
+  slippage_bps: 10
