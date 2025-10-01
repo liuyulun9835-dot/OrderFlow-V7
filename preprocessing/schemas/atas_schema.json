@@ -1,0 +1,78 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ATAS Market Data Schema",
+  "type": "object",
+  "properties": {
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "open": {
+      "type": "number"
+    },
+    "high": {
+      "type": "number"
+    },
+    "low": {
+      "type": "number"
+    },
+    "close": {
+      "type": "number"
+    },
+    "volume": {
+      "type": "number",
+      "minimum": 0
+    },
+    "poc": {
+      "type": "number"
+    },
+    "vah": {
+      "type": "number"
+    },
+    "val": {
+      "type": "number"
+    },
+    "cvd": {
+      "type": "number"
+    },
+    "absorption": {
+      "type": "object",
+      "properties": {
+        "detected": {
+          "type": "boolean"
+        },
+        "strength": {
+          "type": "number"
+        },
+        "side": {
+          "type": "string",
+          "enum": [
+            "buy",
+            "sell",
+            "neutral",
+            ""
+          ]
+        }
+      },
+      "required": [
+        "detected",
+        "side"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "timestamp",
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "poc",
+    "vah",
+    "val",
+    "cvd",
+    "absorption"
+  ],
+  "additionalProperties": false
+}
