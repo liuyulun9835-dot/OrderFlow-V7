@@ -74,6 +74,13 @@ def _duplicate_stats(df: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+def _to_markdown_safe(df: pd.DataFrame, **kwargs) -> str:
+    try:
+        return df.to_markdown(**kwargs)
+    except Exception:
+        return "```\n" + df.to_string(**kwargs) + "\n```"
+
+
 def main() -> None:
     args = _parse_args()
     df = _load_features(args.input)
@@ -85,10 +92,10 @@ def main() -> None:
 
     report_lines: List[str] = ["# Data Quality Report", ""]
 
-    report_lines.extend(["## Missing Values", missing_df.to_markdown(), ""])
-    report_lines.extend(["## 3σ Outliers", outlier_df.to_markdown(index=False), ""])
-    report_lines.extend(["## Time Continuity", jumps_df.to_markdown(index=False), ""])
-    report_lines.extend(["## Duplicate Checks", duplicate_df.to_markdown(index=False), ""])
+    report_lines.extend(["## Missing Values", _to_markdown_safe(missing_df), ""])
+    report_lines.extend(["## 3σ Outliers", _to_markdown_safe(outlier_df, index=False), ""])
+    report_lines.extend(["## Time Continuity", _to_markdown_safe(jumps_df, index=False), ""])
+    report_lines.extend(["## Duplicate Checks", _to_markdown_safe(duplicate_df, index=False), ""])
 
     output_path = args.output
     output_path.parent.mkdir(parents=True, exist_ok=True)
