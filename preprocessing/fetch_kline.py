@@ -14,11 +14,27 @@ import pandas as pd
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Fetch 1m kline data and store as parquet")
-    parser.add_argument("symbol", help="Trading pair symbol, e.g. BTC/USDT")
-    parser.add_argument("start_date", help="Start date (YYYY-MM-DD)")
-    parser.add_argument("end_date", help="End date (YYYY-MM-DD)")
+    parser.add_argument("symbol", nargs="?", help="Trading pair symbol, e.g. BTC/USDT")
+    parser.add_argument("start_date", nargs="?", help="Start date (YYYY-MM-DD)")
+    parser.add_argument("end_date", nargs="?", help="End date (YYYY-MM-DD)")
+    parser.add_argument("--symbol", dest="symbol_opt", help="Trading pair symbol, e.g. BTC/USDT")
+    parser.add_argument("--since", dest="since_opt", help="Start date (YYYY-MM-DD)")
+    parser.add_argument("--until", dest="until_opt", help="End date inclusive (YYYY-MM-DD)")
     parser.add_argument("--exchange", default="binance", help="CCXT exchange id (default: binance)")
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    symbol = args.symbol_opt or args.symbol
+    since = args.since_opt or args.start_date
+    until = args.until_opt or args.end_date
+
+    missing = [name for name, value in {"symbol": symbol, "since": since, "until": until}.items() if not value]
+    if missing:
+        parser.error(f"Missing required arguments: {', '.join(missing)}")
+
+    args.symbol = symbol
+    args.since = since
+    args.until = until
+    return args
 
 
 def to_milliseconds(date_string: str) -> int:
@@ -79,8 +95,8 @@ def save_parquet(df: pd.DataFrame, output_path: Path) -> None:
 
 def main() -> None:
     args = parse_arguments()
-    start_ms = to_milliseconds(args.start_date)
-    end_ms = to_milliseconds_end(args.end_date)
+    start_ms = to_milliseconds(args.since)
+    end_ms = to_milliseconds_end(args.until)
 
     exchange_class = getattr(ccxt, args.exchange)
     exchange = exchange_class({"enableRateLimit": True})
