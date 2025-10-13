@@ -13,6 +13,27 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 
+_ATAS_COLUMN_ALIASES = {
+    "msi": "MSI",
+    "mfi": "MFI",
+    "kli": "KLI",
+    "poc": "POC",
+    "point_of_control": "POC",
+    "vah": "VAH",
+    "value_area_high": "VAH",
+    "val": "VAL",
+    "value_area_low": "VAL",
+    "cvd": "CVD",
+    "cumulative_volume_delta": "CVD",
+    "absorption": "Absorption",
+}
+
+
+def _canonical_atas_column(name: str) -> str | None:
+    key = name.strip().lower().replace(" ", "_")
+    return _ATAS_COLUMN_ALIASES.get(key)
+
+
 DEFAULT_ATAS_DIR = Path("data/atas")
 DEFAULT_KLINE_PATH = Path("data/exchange/kline_1m.parquet")
 DEFAULT_OUTPUT_PATH = Path("data/processed/features.parquet")
@@ -54,8 +75,21 @@ def _normalise_atas_frame(df: pd.DataFrame) -> pd.DataFrame:
     df = df.dropna(subset=[ts_col])
     df.rename(columns={ts_col: "timestamp"}, inplace=True)
     df["timestamp"] = df["timestamp"].dt.floor("min")
-    keep_cols = [c for c in df.columns if c in {"timestamp", "MSI", "MFI", "KLI"}]
-    return df[keep_cols]
+    rename_map = {}
+    for column in df.columns:
+        if column == "timestamp":
+            continue
+        canonical = _canonical_atas_column(column)
+        if canonical is not None:
+            rename_map[column] = canonical
+    if rename_map:
+        df.rename(columns=rename_map, inplace=True)
+    desired = []
+    for column in df.columns:
+        if column == "timestamp" or column in _ATAS_COLUMN_ALIASES.values():
+            if column not in desired:
+                desired.append(column)
+    return df[desired]
 
 
 def _load_single_json(path: Path) -> pd.DataFrame:
@@ -145,7 +179,11 @@ def _build_features(kline: pd.DataFrame, atas: pd.DataFrame) -> pd.DataFrame:
     merged = kline.join(atas, how="left")
     merged.sort_index(inplace=True)
 
-    metrics_cols = [c for c in ["MSI", "MFI", "KLI"] if c in merged.columns]
+    metrics_cols = [
+        c
+        for c in ["MSI", "MFI", "KLI", "POC", "VAH", "VAL", "CVD", "Absorption"]
+        if c in merged.columns
+    ]
     if metrics_cols:
         merged[metrics_cols] = merged[metrics_cols].ffill().fillna(0.0)
 
