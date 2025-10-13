@@ -109,7 +109,7 @@ def main() -> None:
     start_local = _ensure_timezone(start_ts, tz)
     end_local = _ensure_timezone(end_ts, tz)
 
-    idx = pd.date_range(start=start_local.tz_convert("UTC"), end=end_local.tz_convert("UTC"), freq="T")
+    idx = pd.date_range(start=start_local.tz_convert("UTC"), end=end_local.tz_convert("UTC"), freq="min")
 
     holidays: Set[pd.Timestamp] = set()
     if args.holidays:

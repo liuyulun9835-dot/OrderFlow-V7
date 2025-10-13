@@ -53,7 +53,7 @@ def _normalise_atas_frame(df: pd.DataFrame) -> pd.DataFrame:
     df[ts_col] = pd.to_datetime(df[ts_col], utc=True, errors="coerce")
     df = df.dropna(subset=[ts_col])
     df.rename(columns={ts_col: "timestamp"}, inplace=True)
-    df["timestamp"] = df["timestamp"].dt.floor("T")
+    df["timestamp"] = df["timestamp"].dt.floor("min")
     keep_cols = [c for c in df.columns if c in {"timestamp", "MSI", "MFI", "KLI"}]
     return df[keep_cols]
 
@@ -123,8 +123,17 @@ def _load_kline(path: Path) -> pd.DataFrame:
         raise FileNotFoundError(f"Kline parquet not found: {path}")
     df = pd.read_parquet(path)
     if "timestamp" not in df.columns:
-        raise ValueError("Kline parquet must contain a 'timestamp' column")
-    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce").dt.floor("T")
+        if isinstance(df.index, pd.DatetimeIndex):
+            index_name = df.index.name or "index"
+            df = df.reset_index().rename(columns={index_name: "timestamp"})
+        elif "ts" in df.columns:
+            df = df.rename(columns={"ts": "timestamp"})
+        else:
+            raise ValueError("Kline parquet must contain a 'timestamp' column or datetime index/column 'ts'")
+    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce").dt.floor("min")
+    for column in ["open", "high", "low", "close", "volume"]:
+        if column in df.columns:
+            df[column] = pd.to_numeric(df[column], errors="coerce")
     df = df.dropna(subset=["timestamp"]).drop_duplicates(subset="timestamp", keep="last")
     df = df.sort_values("timestamp").set_index("timestamp")
     if df["close"].isna().any():

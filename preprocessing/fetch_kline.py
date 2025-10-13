@@ -82,7 +82,9 @@ def fetch_ohlcv(exchange: ccxt.Exchange, symbol: str, since: int, until: int) ->
 
 def prepare_dataframe(candles: List[List[float]]) -> pd.DataFrame:
     if not candles:
-        return pd.DataFrame(columns=["open", "high", "low", "close", "volume"], dtype=float)
+        return pd.DataFrame(
+            columns=["timestamp", "open", "high", "low", "close", "volume"], dtype=float
+        )
 
     df = pd.DataFrame(candles, columns=["timestamp", "open", "high", "low", "close", "volume"])
     df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
@@ -95,12 +97,15 @@ def prepare_dataframe(candles: List[List[float]]) -> pd.DataFrame:
         df = df.reindex(full_index)
         df[["open", "high", "low", "close", "volume"]] = df[["open", "high", "low", "close", "volume"]].ffill()
 
+    df = df.reset_index()
+    df.rename(columns={"index": "timestamp"}, inplace=True)
+
     return df
 
 
 def save_parquet(df: pd.DataFrame, output_path: Path) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    df.to_parquet(output_path, engine="pyarrow")
+    df.to_parquet(output_path, engine="pyarrow", index=False)
 
 
 def main() -> None:
