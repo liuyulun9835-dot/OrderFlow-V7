@@ -37,6 +37,10 @@ def parse_arguments() -> argparse.Namespace:
     return args
 
 
+def _sanitise_symbol(symbol: str) -> str:
+    return "".join(ch for ch in symbol if ch.isalnum())
+
+
 def to_milliseconds(date_string: str) -> int:
     dt = datetime.strptime(date_string, "%Y-%m-%d").replace(tzinfo=timezone.utc)
     return int(dt.timestamp() * 1000)
@@ -105,7 +109,7 @@ def main() -> None:
     df = prepare_dataframe(candles)
 
     repo_root = Path(__file__).resolve().parents[2]
-    output_dir = repo_root / "data" / "exchange" / args.symbol.replace("/", "-")
+    output_dir = repo_root / "data" / "exchange" / _sanitise_symbol(args.symbol)
     output_path = output_dir / "kline_1m.parquet"
 
     save_parquet(df, output_path)
