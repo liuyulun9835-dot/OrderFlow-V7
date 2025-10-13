@@ -21,6 +21,12 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--since", dest="since_opt", help="Start date (YYYY-MM-DD)")
     parser.add_argument("--until", dest="until_opt", help="End date inclusive (YYYY-MM-DD)")
     parser.add_argument("--exchange", default="binance", help="CCXT exchange id (default: binance)")
+    parser.add_argument(
+        "--output",
+        help=(
+            "Optional parquet output path. Defaults to data/exchange/<symbol>/kline_1m.parquet"
+        ),
+    )
     args = parser.parse_args()
 
     symbol = args.symbol_opt or args.symbol
@@ -108,11 +114,15 @@ def main() -> None:
     candles = fetch_ohlcv(exchange, args.symbol, start_ms, end_ms)
     df = prepare_dataframe(candles)
 
-    repo_root = Path(__file__).resolve().parents[2]
-    output_dir = repo_root / "data" / "exchange" / _sanitise_symbol(args.symbol)
-    output_path = output_dir / "kline_1m.parquet"
+    repo_root = Path(__file__).resolve().parents[1]
+    if args.output:
+        output_path = Path(args.output).expanduser().resolve()
+    else:
+        output_dir = repo_root / "data" / "exchange" / _sanitise_symbol(args.symbol)
+        output_path = (output_dir / "kline_1m.parquet").resolve()
 
     save_parquet(df, output_path)
+    print(f"Saved: {output_path}")
 
 
 if __name__ == "__main__":
