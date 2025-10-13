@@ -1,0 +1,14 @@
+# Data artifacts
+/data/**/*.parquet
+/data/**/*.json
+/data/**/*.jsonl
+!/data/**/.gitkeep
+
+# Log artifacts
+/logs/**
+!/logs/.gitkeep
+
+# Result artifacts
+/results/**/*.md
+!/results/README.md
+!/results/.gitkeep
