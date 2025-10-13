@@ -21,9 +21,14 @@ EU_END = 16   # 08:00-15:59
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate a sessions.csv file.")
-    parser.add_argument("start", help="Start datetime (e.g. 2023-01-01 or 2023-01-01T00:00:00)")
-    parser.add_argument("end", help="End datetime inclusive (same format as start)")
-    parser.add_argument("timezone", help="Exchange timezone, e.g. UTC or Asia/Shanghai")
+    parser.add_argument("start", nargs="?", help="Start datetime (e.g. 2023-01-01 or 2023-01-01T00:00:00)")
+    parser.add_argument("end", nargs="?", help="End datetime inclusive (same format as start)")
+    parser.add_argument("timezone", nargs="?", help="Exchange timezone, e.g. UTC or Asia/Shanghai")
+    parser.add_argument(
+        "--market",
+        choices=["crypto", "stock"],
+        help="Market preset. crypto -> UTC timezone & ignore holidays",
+    )
     parser.add_argument(
         "--holidays",
         help="Optional path to a holiday calendar file (csv/json/txt) containing dates to exclude.",
@@ -33,7 +38,20 @@ def _parse_args() -> argparse.Namespace:
         default="data/meta/sessions.csv",
         help="Where to save the generated CSV (default: data/meta/sessions.csv)",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    if not args.start or not args.end:
+        parser.error("start and end are required")
+
+    timezone = args.timezone
+    if args.market == "crypto":
+        timezone = "UTC"
+        args.holidays = None
+    elif timezone is None:
+        parser.error("timezone is required unless --market=crypto")
+
+    args.timezone = timezone
+    return args
 
 
 def _ensure_timezone(ts: pd.Timestamp, tz: ZoneInfo) -> pd.Timestamp:
