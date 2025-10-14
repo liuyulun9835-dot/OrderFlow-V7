@@ -67,7 +67,7 @@
   </ItemGroup>
 
   <Target Name="CheckAtasSdk" BeforeTargets="Build">
-    <Error Condition=" '$(AtasSdkDir)' == '' " Text="未解析到 ATAS SDK 目录（AtasSdkDir 为空）。请安装到 C:\Program Files (x86)\ATAS Platform\bin 或设置 ATAS_SDK_DIR。" />
+    <Error Condition=" '$(AtasSdkDir)' == '' " Text="未解析到 ATAS SDK 目录。请设置 ATAS_SDK_DIR 或安装到 C:\Program Files (x86)\ATAS Platform\bin。" />
     <Error Condition=" !Exists('$(AtasSdkDir)\Atas.Indicators.dll') " Text="未发现 $(AtasSdkDir)\Atas.Indicators.dll，请检查路径或 ATAS_SDK_DIR。" />
   </Target>
 </Project>
