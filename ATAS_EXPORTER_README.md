@@ -6,34 +6,9 @@ PowerShell -ExecutionPolicy Bypass -File .\scripts\build_exporter.ps1
 
 **编译提示**：本项目要求 C# 8+（<LangVersion>latest</LangVersion>，<Nullable>enable</Nullable>）。若 VS“语言版本”界面仍显示 7.3，请手动检查 `SimplifiedDataExporter.csproj` 与 `atas_integration/Directory.Build.props`。
 
-### SDK 自动探测
-构建时按以下顺序寻找 `Atas.Indicators.dll`：
-1) `ATAS_SDK_DIR` 环境变量
-2) `C:\Program Files\ATAS\bin`
-3) `C:\Program Files\ATAS Platform\bin`
-4) `%LOCALAPPDATA%\Programs\ATAS\bin`
-可显式设置（PowerShell）：
-```powershell
-[Environment]::SetEnvironmentVariable('ATAS_SDK_DIR','C:\Path\To\ATAS\bin',[EnvironmentVariableTarget]::User)
-$env:ATAS_SDK_DIR='C:\Path\To\ATAS\bin' # 当前会话生效
-```
-### ATAS SDK 自动探测
-构建会按以下顺序寻找 `Atas.Indicators.dll`：
-1) `ATAS_SDK_DIR`
-2) `C:\\Program Files\\ATAS\\bin`
-3) `C:\\Program Files\\ATAS Platform\\bin`
-4) `C:\\Program Files (x86)\\ATAS\\bin`
-5) `C:\\Program Files (x86)\\ATAS Platform\\bin`
-6) `%LOCALAPPDATA%\Programs\ATAS\bin`
-可显式指定（PowerShell）：
-```powershell
-[Environment]::SetEnvironmentVariable('ATAS_SDK_DIR','C:\\Program Files (x86)\\ATAS Platform\\bin',[EnvironmentVariableTarget]::User)
-$env:ATAS_SDK_DIR='C:\\Program Files (x86)\\ATAS Platform\\bin'
-```
-
-### 构建所需的 ATAS SDK
-- 本机默认使用：`C:\Program Files (x86)\ATAS Platform\bin`
-- 也可用环境变量覆盖：
+### 构建所需 ATAS SDK
+- 默认读取：`C:\Program Files (x86)\ATAS Platform\bin`
+- 可覆写（PowerShell）：
   ```powershell
   [Environment]::SetEnvironmentVariable('ATAS_SDK_DIR','D:\Your\ATAS\bin',[EnvironmentVariableTarget]::User)
   $env:ATAS_SDK_DIR='D:\Your\ATAS\bin'
