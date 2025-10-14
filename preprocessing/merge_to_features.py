@@ -249,11 +249,16 @@ def main() -> None:
 
     if args.offset_minutes is not None:
         offset = args.offset_minutes
+        offset_label = "manual"
     else:
-        offset, _ = estimate_offset_minutes(atas_df, kline_df)
+        offset, auto_applied = estimate_offset_minutes(atas_df, kline_df)
+        offset_label = "auto"
+        if not auto_applied:
+            print(
+                "Auto offset estimation outside ±0.4 minute threshold; falling back to 0-minute shift.")
     if offset != 0:
         atas_df = apply_offset(atas_df, offset)
-    print(f"ATAS offset applied: {offset} minute(s) ({'auto' if args.offset_minutes is None else 'manual'})")
+    print(f"ATAS offset applied: {offset} minute(s) ({offset_label})")
 
     merged = merge_streams(kline_df, atas_df, args.tolerance_seconds)
     merged = order_columns(merged)

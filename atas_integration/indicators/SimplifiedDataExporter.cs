@@ -128,8 +128,8 @@ namespace AtasCustomIndicators
                 }
 
                 var timestampUtc = ResolveUtcTimestamp(candle.Time);
-                var outputTimestamp = FormatTimestamp(candle.Time);
                 var minuteUtc = FloorToMinute(timestampUtc);
+                var outputTimestamp = FormatTimestamp(minuteUtc);
 
                 var poc = ExtractProfileValue(candle, "POC", "PointOfControl", "PriceOfControl");
                 var vah = ExtractProfileValue(candle, "VAH", "ValueAreaHigh");
@@ -244,17 +244,13 @@ namespace AtasCustomIndicators
             return new DateTimeOffset(localTime.ToUniversalTime(), TimeSpan.Zero);
         }
 
-        private string FormatTimestamp(DateTime candleTime)
+        private string FormatTimestamp(DateTimeOffset minuteUtc)
         {
-            var localSpecified = candleTime.Kind == DateTimeKind.Unspecified
-                ? DateTime.SpecifyKind(candleTime, DateTimeKind.Local)
-                : candleTime;
+            var target = OutputTimezone == TimezoneOption.UTC
+                ? minuteUtc.ToUniversalTime()
+                : minuteUtc.ToLocalTime();
 
-            var dto = OutputTimezone == TimezoneOption.UTC
-                ? new DateTimeOffset(localSpecified.ToUniversalTime(), TimeSpan.Zero)
-                : new DateTimeOffset(localSpecified.ToLocalTime());
-
-            return dto.ToString("o", CultureInfo.InvariantCulture);
+            return target.ToString("o", CultureInfo.InvariantCulture);
         }
 
         private static DateTimeOffset FloorToMinute(DateTimeOffset value)
