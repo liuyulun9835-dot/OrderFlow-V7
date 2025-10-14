@@ -176,7 +176,7 @@ def _load_kline(path: Path) -> pd.DataFrame:
 
 
 def _build_features(kline: pd.DataFrame, atas: pd.DataFrame) -> pd.DataFrame:
-    merged = kline.join(atas, how="left")
+    merged = kline.join(atas, how="inner")
     merged.sort_index(inplace=True)
 
     atas_lowercase_map = {
@@ -196,8 +196,6 @@ def _build_features(kline: pd.DataFrame, atas: pd.DataFrame) -> pd.DataFrame:
         numeric_metrics = [c for c in ["poc", "vah", "val", "cvd", "absorption"] if c in metrics_cols]
         for column in numeric_metrics:
             merged.loc[:, column] = pd.to_numeric(merged[column], errors="coerce")
-        merged.loc[:, metrics_cols] = merged.loc[:, metrics_cols].ffill()
-        merged.loc[:, metrics_cols] = merged.loc[:, metrics_cols].fillna(0.0)
 
     if "close" not in merged.columns:
         raise ValueError("Kline data must contain a 'close' column to compute returns")
@@ -224,7 +222,10 @@ def _build_features(kline: pd.DataFrame, atas: pd.DataFrame) -> pd.DataFrame:
         merged["order_imbalance"] = 0.0
 
     numeric_cols = merged.select_dtypes(include=["number"]).columns
-    merged[numeric_cols] = merged[numeric_cols].fillna(0.0)
+    metric_columns = {"poc", "vah", "val", "cvd", "absorption", "msi", "mfi", "kli"}
+    fill_cols = [col for col in numeric_cols if col.lower() not in metric_columns]
+    if fill_cols:
+        merged[fill_cols] = merged[fill_cols].fillna(0.0)
 
     merged.reset_index(inplace=True)
     merged.rename(columns={"index": "timestamp"}, inplace=True)
