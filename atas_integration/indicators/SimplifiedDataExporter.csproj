@@ -12,43 +12,19 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <!-- 允许环境变量覆盖 -->
+    <AtasSdkDir Condition=" '$(ATAS_SDK_DIR)' != '' ">$(ATAS_SDK_DIR)</AtasSdkDir>
+    <!-- 若未设置环境变量，则用本机固定路径（你这台机器的 ATAS 安装位置） -->
+    <AtasSdkDir Condition=" '$(AtasSdkDir)' == '' and Exists('C:\Program Files (x86)\ATAS Platform\bin\Atas.Indicators.dll') ">
+      C:\Program Files (x86)\ATAS Platform\bin
+    </AtasSdkDir>
+  </PropertyGroup>
+
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
     <Optimize>true</Optimize>
     <DebugType>portable</DebugType>
   </PropertyGroup>
-
-  <Choose>
-    <When Condition=" '$(ATAS_SDK_DIR)' != '' and Exists('$(ATAS_SDK_DIR)\Atas.Indicators.dll') ">
-      <PropertyGroup>
-        <AtasSdkDir>$(ATAS_SDK_DIR)</AtasSdkDir>
-      </PropertyGroup>
-    </When>
-    <When Condition=" Exists('$(ProgramFiles)\ATAS\bin\Atas.Indicators.dll') ">
-      <PropertyGroup>
-        <AtasSdkDir>$(ProgramFiles)\ATAS\bin</AtasSdkDir>
-      </PropertyGroup>
-    </When>
-    <When Condition=" Exists('$(ProgramFiles)\ATAS Platform\bin\Atas.Indicators.dll') ">
-      <PropertyGroup>
-        <AtasSdkDir>$(ProgramFiles)\ATAS Platform\bin</AtasSdkDir>
-      </PropertyGroup>
-    </When>
-    <When Condition=" Exists('$(ProgramFiles(x86))\ATAS\bin\Atas.Indicators.dll') ">
-      <PropertyGroup>
-        <AtasSdkDir>$(ProgramFiles(x86))\ATAS\bin</AtasSdkDir>
-      </PropertyGroup>
-    </When>
-    <When Condition=" Exists('$(ProgramFiles(x86))\ATAS Platform\bin\Atas.Indicators.dll') ">
-      <PropertyGroup>
-        <AtasSdkDir>$(ProgramFiles(x86))\ATAS Platform\bin</AtasSdkDir>
-      </PropertyGroup>
-    </When>
-    <When Condition=" Exists('$(LOCALAPPDATA)\Programs\ATAS\bin\Atas.Indicators.dll') ">
-      <PropertyGroup>
-        <AtasSdkDir>$(LOCALAPPDATA)\Programs\ATAS\bin</AtasSdkDir>
-      </PropertyGroup>
-    </When>
-  </Choose>
 
   <ItemGroup>
     <Reference Include="Atas.Indicators" Condition=" '$(AtasSdkDir)' != '' and Exists('$(AtasSdkDir)\Atas.Indicators.dll') ">
@@ -56,8 +32,8 @@
       <Private>false</Private>
       <SpecificVersion>false</SpecificVersion>
     </Reference>
-    <Reference Include="Atas.Types" Condition=" '$(AtasSdkDir)' != '' and Exists('$(AtasSdkDir)\Atas.Types.dll') ">
-      <HintPath>$(AtasSdkDir)\Atas.Types.dll</HintPath>
+    <Reference Include="ATAS.Types" Condition=" '$(AtasSdkDir)' != '' and Exists('$(AtasSdkDir)\ATAS.Types.dll') ">
+      <HintPath>$(AtasSdkDir)\ATAS.Types.dll</HintPath>
       <Private>false</Private>
       <SpecificVersion>false</SpecificVersion>
     </Reference>
@@ -90,8 +66,8 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
 
-  <Target Name="CheckAtasSdk" BeforeTargets="Build">
-    <Error Condition=" '$(AtasSdkDir)' == '' " Text="未找到 ATAS SDK。请安装 ATAS 或设置 ATAS_SDK_DIR。" />
-    <Error Condition=" !Exists('$(AtasSdkDir)\Atas.Indicators.dll') " Text="未发现 $(AtasSdkDir)\Atas.Indicators.dll，请检查安装或 ATAS_SDK_DIR。" />
+  <Target Name="EnsureAtasSdk" BeforeTargets="Build">
+    <Error Condition=" '$(AtasSdkDir)' == '' " Text="未解析到 ATAS SDK 目录（AtasSdkDir 为空）。请设置 ATAS_SDK_DIR 或安装到 C:\Program Files (x86)\ATAS Platform\bin。" />
+    <Error Condition=" !Exists('$(AtasSdkDir)\Atas.Indicators.dll') " Text="未发现 $(AtasSdkDir)\Atas.Indicators.dll。请确认路径正确。" />
   </Target>
 </Project>

@@ -30,3 +30,11 @@ $env:ATAS_SDK_DIR='C:\Path\To\ATAS\bin' # 当前会话生效
 [Environment]::SetEnvironmentVariable('ATAS_SDK_DIR','C:\\Program Files (x86)\\ATAS Platform\\bin',[EnvironmentVariableTarget]::User)
 $env:ATAS_SDK_DIR='C:\\Program Files (x86)\\ATAS Platform\\bin'
 ```
+
+### 构建所需的 ATAS SDK
+- 本机默认使用：`C:\Program Files (x86)\ATAS Platform\bin`
+- 也可用环境变量覆盖：
+  ```powershell
+  [Environment]::SetEnvironmentVariable('ATAS_SDK_DIR','D:\Your\ATAS\bin',[EnvironmentVariableTarget]::User)
+  $env:ATAS_SDK_DIR='D:\Your\ATAS\bin'
+  ```
