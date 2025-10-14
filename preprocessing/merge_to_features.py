@@ -1,128 +1,101 @@
 #!/usr/bin/env python3
 """Merge ATAS order-flow data with exchange klines to build a feature set."""
+
 from __future__ import annotations
 
 import argparse
 import json
 from pathlib import Path
-from typing import Iterable, List
+from typing import Any, Iterable, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
+from zoneinfo import ZoneInfo
 
-
-_ATAS_COLUMN_ALIASES = {
-    "msi": "MSI",
-    "mfi": "MFI",
-    "kli": "KLI",
-    "poc": "POC",
-    "point_of_control": "POC",
-    "vah": "VAH",
-    "value_area_high": "VAH",
-    "val": "VAL",
-    "value_area_low": "VAL",
-    "cvd": "CVD",
-    "cumulative_volume_delta": "CVD",
-    "absorption": "Absorption",
-}
-
-
-def _canonical_atas_column(name: str) -> str | None:
-    key = name.strip().lower().replace(" ", "_")
-    return _ATAS_COLUMN_ALIASES.get(key)
-
-
+TIMESTAMP_CANDIDATES = ("timestamp", "time", "datetime", "dt", "bar_time")
 DEFAULT_ATAS_DIR = Path("data/atas")
 DEFAULT_KLINE_PATH = Path("data/exchange/kline_1m.parquet")
 DEFAULT_OUTPUT_PATH = Path("data/processed/features.parquet")
 
 
-def _parse_args() -> argparse.Namespace:
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Merge ATAS and exchange data into features.parquet")
-    parser.add_argument("--symbol", help="Symbol identifier for logging/metadata", default=None)
-    parser.add_argument("--atas-dir", type=Path, default=DEFAULT_ATAS_DIR, help="Directory containing ATAS json/jsonl exports")
+    parser.add_argument("--symbol", help="Symbol identifier for logging", default=None)
+    parser.add_argument("--atas-dir", type=Path, default=DEFAULT_ATAS_DIR, help="Directory containing ATAS exports")
     parser.add_argument("--kline", type=Path, default=DEFAULT_KLINE_PATH, help="Path to 1m kline parquet file")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT_PATH, help="Path to output parquet file")
+    parser.add_argument("--atas-tz", default="Europe/Moscow", help="Timezone for naive ATAS timestamps")
+    parser.add_argument("--tolerance-seconds", type=int, default=45, help="Nearest-neighbour tolerance in seconds")
+    parser.add_argument("--offset-minutes", type=int, help="Override ATAS timestamp offset in minutes")
     return parser.parse_args()
 
 
-def _detect_timestamp_column(columns: Iterable[str]) -> str:
-    for candidate in ("timestamp", "time", "datetime", "ts"):
+def detect_timestamp_column(columns: Iterable[str]) -> str:
+    for candidate in TIMESTAMP_CANDIDATES:
         if candidate in columns:
             return candidate
     raise ValueError("No timestamp column found in ATAS file")
 
 
-def _frame_from_data(data: object) -> pd.DataFrame:
-    if isinstance(data, dict):
-        if "data" in data and isinstance(data["data"], list):
-            df = pd.DataFrame(data["data"])
-        else:
-            df = pd.DataFrame([data])
-    else:
-        df = pd.DataFrame(data)
-    return df
+def frame_from_payload(payload: Any) -> pd.DataFrame:
+    if isinstance(payload, dict):
+        if "data" in payload and isinstance(payload["data"], list):
+            return pd.DataFrame(payload["data"])
+        return pd.DataFrame([payload])
+    if isinstance(payload, list):
+        return pd.DataFrame(payload)
+    return pd.DataFrame()
 
 
-def _normalise_atas_frame(df: pd.DataFrame) -> pd.DataFrame:
-    if df.empty:
-        return df
-    ts_col = _detect_timestamp_column(df.columns)
-    df = df.copy()
-    df[ts_col] = pd.to_datetime(df[ts_col], utc=True, errors="coerce")
-    df = df.dropna(subset=[ts_col])
-    df.rename(columns={ts_col: "timestamp"}, inplace=True)
-    df["timestamp"] = df["timestamp"].dt.floor("min")
-    rename_map = {}
-    for column in df.columns:
-        if column == "timestamp":
-            continue
-        canonical = _canonical_atas_column(column)
-        if canonical is not None:
-            rename_map[column] = canonical
-    if rename_map:
-        df.rename(columns=rename_map, inplace=True)
-    desired = []
-    for column in df.columns:
-        if column == "timestamp" or column in _ATAS_COLUMN_ALIASES.values():
-            if column not in desired:
-                desired.append(column)
-    return df[desired]
-
-
-def _load_single_json(path: Path) -> pd.DataFrame:
-    raw = path.read_text()
+def load_json_file(path: Path) -> pd.DataFrame:
+    text = path.read_text(encoding="utf-8")
     try:
-        data = json.loads(raw)
+        data = json.loads(text)
     except json.JSONDecodeError:
-        df = pd.read_json(path, lines=True)
-        return _normalise_atas_frame(df)
-
-    df = _frame_from_data(data)
-    return _normalise_atas_frame(df)
+        return pd.read_json(path, lines=True)
+    return frame_from_payload(data)
 
 
-def _load_single_jsonl(path: Path) -> pd.DataFrame:
+def load_jsonl_file(path: Path) -> pd.DataFrame:
     frames: List[pd.DataFrame] = []
     with path.open("r", encoding="utf-8") as handle:
         for line in handle:
             stripped = line.strip()
             if not stripped:
                 continue
-            try:
-                data = json.loads(stripped)
-            except json.JSONDecodeError as exc:
-                raise ValueError(f"Failed to parse line in {path}: {exc}") from exc
-            frames.append(_frame_from_data(data))
+            data = json.loads(stripped)
+            frame = frame_from_payload(data)
+            if not frame.empty:
+                frames.append(frame)
     if not frames:
         return pd.DataFrame()
-    df = pd.concat(frames, ignore_index=True)
-    return _normalise_atas_frame(df)
+    return pd.concat(frames, ignore_index=True)
 
 
-def _iter_atas_files(directory: Path) -> List[Path]:
+def normalise_atas_frame(df: pd.DataFrame, tz_name: str) -> pd.DataFrame:
+    if df.empty:
+        return df
+    ts_column = detect_timestamp_column(df.columns)
+    df = df.copy()
+    df.columns = [col.strip() for col in df.columns]
+    df = df.dropna(how="all")
+    df[ts_column] = pd.to_datetime(df[ts_column], utc=False, errors="coerce")
+    df = df.dropna(subset=[ts_column])
+    timestamps = df[ts_column]
+    if getattr(timestamps.dt, "tz", None) is None:
+        timestamps = timestamps.dt.tz_localize(ZoneInfo(tz_name))
+    timestamps = timestamps.dt.tz_convert("UTC")
+    df["timestamp_raw"] = timestamps
+    if ts_column != "timestamp":
+        df.drop(columns=[ts_column], inplace=True)
+    df["timestamp"] = df["timestamp_raw"].dt.floor("min")
+    df.sort_values("timestamp_raw", inplace=True)
+    return df
+
+
+def iter_atas_files(directory: Path) -> List[Path]:
     if not directory.exists():
         raise FileNotFoundError(f"ATAS directory not found: {directory}")
     files = sorted(
@@ -131,104 +104,168 @@ def _iter_atas_files(directory: Path) -> List[Path]:
         if path.is_file() and path.suffix.lower() in {".json", ".jsonl"}
     )
     if not files:
-        raise ValueError(f"未在 {directory} 发现 json/jsonl")
+        raise ValueError(f"No json/jsonl files found in {directory}")
     return files
 
 
-def _load_atas(directory: Path) -> pd.DataFrame:
+def load_atas(directory: Path, tz_name: str) -> pd.DataFrame:
     frames: List[pd.DataFrame] = []
-    for path in _iter_atas_files(directory):
+    for path in iter_atas_files(directory):
         if path.suffix.lower() == ".jsonl":
-            df = _load_single_jsonl(path)
+            raw = load_jsonl_file(path)
         else:
-            df = _load_single_json(path)
-        if not df.empty:
-            frames.append(df)
+            raw = load_json_file(path)
+        normalised = normalise_atas_frame(raw, tz_name)
+        if not normalised.empty:
+            frames.append(normalised)
     if not frames:
-        raise ValueError(f"未在 {directory} 发现 json/jsonl")
+        raise ValueError(f"No ATAS data parsed from {directory}")
     merged = pd.concat(frames, ignore_index=True)
-    merged = merged.sort_values("timestamp").drop_duplicates(subset="timestamp", keep="last")
-    merged.set_index("timestamp", inplace=True)
+    merged = merged.sort_values("timestamp_raw")
+    merged = merged.groupby("timestamp", as_index=False).last()
+    merged.drop(columns=["timestamp_raw"], inplace=True)
+    merged = merged.sort_values("timestamp").reset_index(drop=True)
     return merged
 
 
-def _load_kline(path: Path) -> pd.DataFrame:
+def load_kline(path: Path) -> pd.DataFrame:
     if not path.exists():
         raise FileNotFoundError(f"Kline parquet not found: {path}")
     df = pd.read_parquet(path)
     if "timestamp" not in df.columns:
         if isinstance(df.index, pd.DatetimeIndex):
-            index_name = df.index.name or "index"
-            df = df.reset_index().rename(columns={index_name: "timestamp"})
+            df = df.reset_index().rename(columns={df.index.name or "index": "timestamp"})
         elif "ts" in df.columns:
             df = df.rename(columns={"ts": "timestamp"})
         else:
             raise ValueError("Kline parquet must contain a 'timestamp' column or datetime index/column 'ts'")
-    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce").dt.floor("min")
-    for column in ["open", "high", "low", "close", "volume"]:
-        if column in df.columns:
-            df[column] = pd.to_numeric(df[column], errors="coerce")
-    df = df.dropna(subset=["timestamp"]).drop_duplicates(subset="timestamp", keep="last")
-    df = df.sort_values("timestamp").set_index("timestamp")
-    if df["close"].isna().any():
-        raise ValueError("Found missing close prices in kline data")
+    df = df.copy()
+    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
+    df = df.dropna(subset=["timestamp"])
+    df["timestamp"] = df["timestamp"].dt.floor("min")
+    df = df.drop_duplicates(subset="timestamp", keep="last").sort_values("timestamp").reset_index(drop=True)
     return df
 
 
-def _build_features(kline: pd.DataFrame, atas: pd.DataFrame) -> pd.DataFrame:
-    merged = kline.join(atas, how="inner")
-    merged.sort_index(inplace=True)
-    merged.rename(columns=str.lower, inplace=True)
+def estimate_offset_minutes(atas: pd.DataFrame, kline: pd.DataFrame) -> Tuple[int, bool]:
+    if atas.empty or kline.empty:
+        return 0, False
+    sample = atas.head(2000).copy()
+    sample = sample.sort_values("timestamp")
+    kline_subset = kline[["timestamp"]].copy().rename(columns={"timestamp": "kline_timestamp"})
+    merged = pd.merge_asof(
+        sample[["timestamp"]],
+        kline_subset,
+        left_on="timestamp",
+        right_on="kline_timestamp",
+        direction="nearest",
+        tolerance=pd.Timedelta(seconds=300),
+    )
+    merged.dropna(subset=["kline_timestamp"], inplace=True)
+    if merged.empty:
+        return 0, False
+    delta_minutes = (
+        (merged["kline_timestamp"] - merged["timestamp"]).dt.total_seconds() / 60.0
+    )
+    median_offset = float(delta_minutes.median())
+    rounded = int(round(median_offset))
+    if abs(median_offset - rounded) <= 0.4:
+        return rounded, True
+    return 0, False
 
-    metrics_cols = [c for c in ["poc", "vah", "val", "cvd", "absorption"] if c in merged.columns]
-    for column in metrics_cols:
-        merged.loc[:, column] = pd.to_numeric(merged[column], errors="coerce")
 
-    if "close" not in merged.columns:
-        raise ValueError("Kline data must contain a 'close' column to compute returns")
+def apply_offset(df: pd.DataFrame, minutes: int) -> pd.DataFrame:
+    if minutes == 0:
+        return df
+    shifted = df.copy()
+    shifted["timestamp"] = shifted["timestamp"] + pd.Timedelta(minutes=minutes)
+    shifted["timestamp"] = shifted["timestamp"].dt.floor("min")
+    shifted = shifted.groupby("timestamp", as_index=False).last()
+    return shifted.sort_values("timestamp").reset_index(drop=True)
 
-    if merged["close"].isna().any():
-        raise ValueError("Missing close prices detected after merge")
 
-    safe_close = merged["close"].replace(0, np.nan)
-    merged["return_1m"] = merged["close"].pct_change().fillna(0.0)
-    merged["log_return_1m"] = np.log(safe_close).diff().replace([np.inf, -np.inf], 0.0).fillna(0.0)
+def flatten_absorption(df: pd.DataFrame) -> pd.DataFrame:
+    detected = df.get("absorption_detected", pd.Series(index=df.index, dtype="object"))
+    strength = df.get("absorption_strength", pd.Series(index=df.index, dtype="float64"))
+    side = df.get("absorption_side", pd.Series(index=df.index, dtype="object"))
 
-    if "volume" in merged.columns:
-        merged["volume_volatility_30m"] = (
-            merged["volume"].rolling(window=30, min_periods=1).std().fillna(0.0)
-        )
-        merged["volume_mean_30m"] = merged["volume"].rolling(window=30, min_periods=1).mean().fillna(0.0)
-    else:
-        merged["volume_volatility_30m"] = 0.0
-        merged["volume_mean_30m"] = 0.0
+    if "absorption" in df.columns:
+        extracted_detected = []
+        extracted_strength = []
+        extracted_side = []
+        for value in df["absorption"]:
+            if isinstance(value, dict):
+                extracted_detected.append(value.get("detected"))
+                extracted_strength.append(value.get("strength") or value.get("volume"))
+                extracted_side.append(value.get("side") or value.get("direction"))
+            else:
+                extracted_detected.append(None)
+                extracted_strength.append(None)
+                extracted_side.append(None)
+        detected = detected.combine_first(pd.Series(extracted_detected, index=df.index))
+        strength = strength.combine_first(pd.Series(extracted_strength, index=df.index))
+        side = side.combine_first(pd.Series(extracted_side, index=df.index))
+        df = df.drop(columns=["absorption"])
 
-    if {"msi", "mfi"}.issubset(merged.columns):
-        merged["order_imbalance"] = (merged["msi"] - merged["mfi"]).fillna(0.0)
-    else:
-        merged["order_imbalance"] = 0.0
+    df["absorption_detected"] = detected.replace({"": np.nan})
+    df["absorption_strength"] = pd.to_numeric(strength, errors="coerce")
+    df["absorption_side"] = side.replace({" ": np.nan, "": np.nan})
+    return df
 
-    numeric_cols = merged.select_dtypes(include=["number"]).columns
-    metric_columns = {"poc", "vah", "val", "cvd", "absorption", "msi", "mfi", "kli"}
-    fill_cols = [col for col in numeric_cols if col.lower() not in metric_columns]
-    if fill_cols:
-        merged[fill_cols] = merged[fill_cols].fillna(0.0)
 
-    merged.reset_index(inplace=True)
-    merged.rename(columns={"index": "timestamp"}, inplace=True)
+def merge_streams(kline: pd.DataFrame, atas: pd.DataFrame, tolerance_seconds: int) -> pd.DataFrame:
+    merged = pd.merge_asof(
+        kline.sort_values("timestamp"),
+        atas.sort_values("timestamp"),
+        on="timestamp",
+        direction="nearest",
+        tolerance=pd.Timedelta(seconds=tolerance_seconds),
+    )
+    merged = flatten_absorption(merged)
+    merged = merged.sort_values("timestamp").reset_index(drop=True)
     return merged
 
 
-def main() -> None:
-    args = _parse_args()
+def order_columns(df: pd.DataFrame) -> pd.DataFrame:
+    columns = [col for col in df.columns if col != "timestamp"]
+    ordered = ["timestamp"] + sorted(columns, key=lambda x: x.lower())
+    return df[ordered]
 
-    atas_df = _load_atas(args.atas_dir)
-    kline_df = _load_kline(args.kline)
-    features = _build_features(kline_df, atas_df)
+
+def print_coverage(df: pd.DataFrame) -> None:
+    print("Column coverage (non-null ratio):")
+    for column in df.columns:
+        if column == "timestamp":
+            continue
+        series = df[column]
+        coverage = series.replace({"": np.nan}).notna().mean()
+        print(f"  {column}: {coverage:.2%}")
+
+
+def main() -> None:
+    args = parse_args()
+    atas_df = load_atas(args.atas_dir, args.atas_tz)
+    kline_df = load_kline(args.kline)
+
+    if args.offset_minutes is not None:
+        offset = args.offset_minutes
+    else:
+        offset, _ = estimate_offset_minutes(atas_df, kline_df)
+    if offset != 0:
+        atas_df = apply_offset(atas_df, offset)
+    print(f"ATAS offset applied: {offset} minute(s) ({'auto' if args.offset_minutes is None else 'manual'})")
+
+    merged = merge_streams(kline_df, atas_df, args.tolerance_seconds)
+    merged = order_columns(merged)
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    table = pa.Table.from_pandas(features)
+    table = pa.Table.from_pandas(merged, preserve_index=False)
     pq.write_table(table, args.output)
+
+    print(f"Merged rows: {len(merged)}")
+    if not merged.empty:
+        print(f"Time range: {merged['timestamp'].min()} → {merged['timestamp'].max()}")
+    print_coverage(merged)
 
 
 if __name__ == "__main__":

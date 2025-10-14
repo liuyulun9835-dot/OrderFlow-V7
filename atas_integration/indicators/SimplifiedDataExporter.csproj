@@ -4,6 +4,14 @@
     <OutputType>Library</OutputType>
     <AssemblyName>SimplifiedDataExporter</AssemblyName>
     <RootNamespace>AtasCustomIndicators</RootNamespace>
+    <Configurations>Debug;Release</Configurations>
+    <Platforms>AnyCPU</Platforms>
+    <AssemblyVersion>6.1.0.0</AssemblyVersion>
+    <FileVersion>6.1.0.0</FileVersion>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <Optimize>true</Optimize>
+    <DebugType>portable</DebugType>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="ATAS Indicators">
