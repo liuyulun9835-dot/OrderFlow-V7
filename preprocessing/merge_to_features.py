@@ -178,24 +178,11 @@ def _load_kline(path: Path) -> pd.DataFrame:
 def _build_features(kline: pd.DataFrame, atas: pd.DataFrame) -> pd.DataFrame:
     merged = kline.join(atas, how="inner")
     merged.sort_index(inplace=True)
+    merged.rename(columns=str.lower, inplace=True)
 
-    atas_lowercase_map = {
-        column: column.lower()
-        for column in ["POC", "VAH", "VAL", "CVD", "Absorption"]
-        if column in merged.columns
-    }
-    if atas_lowercase_map:
-        merged.rename(columns=atas_lowercase_map, inplace=True)
-
-    metrics_cols = [
-        c
-        for c in ["MSI", "MFI", "KLI", "poc", "vah", "val", "cvd", "absorption"]
-        if c in merged.columns
-    ]
-    if metrics_cols:
-        numeric_metrics = [c for c in ["poc", "vah", "val", "cvd", "absorption"] if c in metrics_cols]
-        for column in numeric_metrics:
-            merged.loc[:, column] = pd.to_numeric(merged[column], errors="coerce")
+    metrics_cols = [c for c in ["poc", "vah", "val", "cvd", "absorption"] if c in merged.columns]
+    for column in metrics_cols:
+        merged.loc[:, column] = pd.to_numeric(merged[column], errors="coerce")
 
     if "close" not in merged.columns:
         raise ValueError("Kline data must contain a 'close' column to compute returns")
@@ -216,8 +203,8 @@ def _build_features(kline: pd.DataFrame, atas: pd.DataFrame) -> pd.DataFrame:
         merged["volume_volatility_30m"] = 0.0
         merged["volume_mean_30m"] = 0.0
 
-    if {"MSI", "MFI"}.issubset(merged.columns):
-        merged["order_imbalance"] = (merged["MSI"] - merged["MFI"]).fillna(0.0)
+    if {"msi", "mfi"}.issubset(merged.columns):
+        merged["order_imbalance"] = (merged["msi"] - merged["mfi"]).fillna(0.0)
     else:
         merged["order_imbalance"] = 0.0
 

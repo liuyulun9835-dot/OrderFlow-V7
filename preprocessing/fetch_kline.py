@@ -27,6 +27,11 @@ def parse_arguments() -> argparse.Namespace:
             "Optional parquet output path. Defaults to data/exchange/<symbol>/kline_1m.parquet"
         ),
     )
+    parser.add_argument(
+        "--append",
+        action="store_true",
+        help="Append to an existing parquet file (union, drop duplicates by timestamp, sort)",
+    )
     args = parser.parse_args()
 
     symbol = args.symbol_opt or args.symbol
@@ -103,9 +108,38 @@ def prepare_dataframe(candles: List[List[float]]) -> pd.DataFrame:
     return df
 
 
-def save_parquet(df: pd.DataFrame, output_path: Path) -> None:
+def _ensure_timestamp_column(frame: pd.DataFrame) -> pd.DataFrame:
+    if "timestamp" not in frame.columns:
+        if isinstance(frame.index, pd.DatetimeIndex):
+            index_name = frame.index.name or "index"
+            frame = frame.reset_index().rename(columns={index_name: "timestamp"})
+        elif "ts" in frame.columns:
+            frame = frame.rename(columns={"ts": "timestamp"})
+    frame = frame.copy()
+    frame["timestamp"] = pd.to_datetime(frame["timestamp"], utc=True, errors="coerce")
+    frame = frame.dropna(subset=["timestamp"])
+    return frame
+
+
+def save_parquet(df: pd.DataFrame, output_path: Path, append: bool = False) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if append and output_path.exists():
+        try:
+            existing = pd.read_parquet(output_path)
+            existing = _ensure_timestamp_column(existing)
+            combined = pd.concat([existing, df], ignore_index=True)
+            combined = combined.drop_duplicates(subset=["timestamp"], keep="last")
+            combined = combined.sort_values("timestamp").reset_index(drop=True)
+            combined.to_parquet(output_path, engine="pyarrow", index=False)
+            print(f"Saved (append+dedupe): {output_path}")
+            print(f"Rows: {len(combined)} (existing {len(existing)}, new {len(df)})")
+            return
+        except Exception as exc:  # noqa: BLE001
+            print(f"[WARN] Failed to append due to error: {exc}. Falling back to overwrite.")
+
     df.to_parquet(output_path, engine="pyarrow", index=False)
+    print(f"Saved: {output_path}")
 
 
 def main() -> None:
@@ -126,8 +160,7 @@ def main() -> None:
         output_dir = repo_root / "data" / "exchange" / _sanitise_symbol(args.symbol)
         output_path = (output_dir / "kline_1m.parquet").resolve()
 
-    save_parquet(df, output_path)
-    print(f"Saved: {output_path}")
+    save_parquet(df, output_path, append=args.append)
 
 
 if __name__ == "__main__":
