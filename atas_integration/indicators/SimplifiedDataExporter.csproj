@@ -11,16 +11,57 @@
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
     <Optimize>true</Optimize>
     <DebugType>portable</DebugType>
   </PropertyGroup>
+
+  <Choose>
+    <When Condition=" '$(ATAS_SDK_DIR)' != '' and Exists('$(ATAS_SDK_DIR)\Atas.Indicators.dll') ">
+      <PropertyGroup>
+        <AtasSdkDir>$(ATAS_SDK_DIR)</AtasSdkDir>
+      </PropertyGroup>
+    </When>
+    <When Condition=" Exists('$(ProgramFiles)\ATAS\bin\Atas.Indicators.dll') ">
+      <PropertyGroup>
+        <AtasSdkDir>$(ProgramFiles)\ATAS\bin</AtasSdkDir>
+      </PropertyGroup>
+    </When>
+    <When Condition=" Exists('$(ProgramFiles)\ATAS Platform\bin\Atas.Indicators.dll') ">
+      <PropertyGroup>
+        <AtasSdkDir>$(ProgramFiles)\ATAS Platform\bin</AtasSdkDir>
+      </PropertyGroup>
+    </When>
+    <When Condition=" Exists('$(LOCALAPPDATA)\Programs\ATAS\bin\Atas.Indicators.dll') ">
+      <PropertyGroup>
+        <AtasSdkDir>$(LOCALAPPDATA)\Programs\ATAS\bin</AtasSdkDir>
+      </PropertyGroup>
+    </When>
+  </Choose>
+
   <ItemGroup>
-    <Reference Include="ATAS Indicators">
-      <HintPath>..\..\external\ATAS Indicators.dll</HintPath>
+    <Reference Include="Atas.Indicators" Condition=" '$(AtasSdkDir)' != '' and Exists('$(AtasSdkDir)\Atas.Indicators.dll') ">
+      <HintPath>$(AtasSdkDir)\Atas.Indicators.dll</HintPath>
       <Private>false</Private>
+      <SpecificVersion>false</SpecificVersion>
+    </Reference>
+    <Reference Include="Atas.Core" Condition=" '$(AtasSdkDir)' != '' and Exists('$(AtasSdkDir)\Atas.Core.dll') ">
+      <HintPath>$(AtasSdkDir)\Atas.Core.dll</HintPath>
+      <Private>false</Private>
+      <SpecificVersion>false</SpecificVersion>
+    </Reference>
+    <Reference Include="Atas.Common" Condition=" '$(AtasSdkDir)' != '' and Exists('$(AtasSdkDir)\Atas.Common.dll') ">
+      <HintPath>$(AtasSdkDir)\Atas.Common.dll</HintPath>
+      <Private>false</Private>
+      <SpecificVersion>false</SpecificVersion>
     </Reference>
     <Reference Include="Microsoft.CSharp" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
+
+  <Target Name="CheckAtasSdk" BeforeTargets="Build">
+    <Error Condition=" '$(AtasSdkDir)' == '' " Text="未找到 ATAS SDK。请设置环境变量 ATAS_SDK_DIR 或安装到 Program Files / LocalAppData 之一。" />
+    <Error Condition=" !Exists('$(AtasSdkDir)\Atas.Indicators.dll') " Text="未发现 $(AtasSdkDir)\Atas.Indicators.dll ，请检查 ATAS 安装或设置 ATAS_SDK_DIR。" />
+  </Target>
 </Project>
