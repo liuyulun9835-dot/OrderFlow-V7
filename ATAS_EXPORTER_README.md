@@ -17,3 +17,16 @@ PowerShell -ExecutionPolicy Bypass -File .\scripts\build_exporter.ps1
 [Environment]::SetEnvironmentVariable('ATAS_SDK_DIR','C:\Path\To\ATAS\bin',[EnvironmentVariableTarget]::User)
 $env:ATAS_SDK_DIR='C:\Path\To\ATAS\bin' # 当前会话生效
 ```
+### ATAS SDK 自动探测
+构建会按以下顺序寻找 `Atas.Indicators.dll`：
+1) `ATAS_SDK_DIR`
+2) `C:\\Program Files\\ATAS\\bin`
+3) `C:\\Program Files\\ATAS Platform\\bin`
+4) `C:\\Program Files (x86)\\ATAS\\bin`
+5) `C:\\Program Files (x86)\\ATAS Platform\\bin`
+6) `%LOCALAPPDATA%\Programs\ATAS\bin`
+可显式指定（PowerShell）：
+```powershell
+[Environment]::SetEnvironmentVariable('ATAS_SDK_DIR','C:\\Program Files (x86)\\ATAS Platform\\bin',[EnvironmentVariableTarget]::User)
+$env:ATAS_SDK_DIR='C:\\Program Files (x86)\\ATAS Platform\\bin'
+```

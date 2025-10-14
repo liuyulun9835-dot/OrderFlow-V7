@@ -33,6 +33,16 @@
         <AtasSdkDir>$(ProgramFiles)\ATAS Platform\bin</AtasSdkDir>
       </PropertyGroup>
     </When>
+    <When Condition=" Exists('$(ProgramFiles(x86))\ATAS\bin\Atas.Indicators.dll') ">
+      <PropertyGroup>
+        <AtasSdkDir>$(ProgramFiles(x86))\ATAS\bin</AtasSdkDir>
+      </PropertyGroup>
+    </When>
+    <When Condition=" Exists('$(ProgramFiles(x86))\ATAS Platform\bin\Atas.Indicators.dll') ">
+      <PropertyGroup>
+        <AtasSdkDir>$(ProgramFiles(x86))\ATAS Platform\bin</AtasSdkDir>
+      </PropertyGroup>
+    </When>
     <When Condition=" Exists('$(LOCALAPPDATA)\Programs\ATAS\bin\Atas.Indicators.dll') ">
       <PropertyGroup>
         <AtasSdkDir>$(LOCALAPPDATA)\Programs\ATAS\bin</AtasSdkDir>
@@ -46,13 +56,33 @@
       <Private>false</Private>
       <SpecificVersion>false</SpecificVersion>
     </Reference>
-    <Reference Include="Atas.Core" Condition=" '$(AtasSdkDir)' != '' and Exists('$(AtasSdkDir)\Atas.Core.dll') ">
-      <HintPath>$(AtasSdkDir)\Atas.Core.dll</HintPath>
+    <Reference Include="Atas.Types" Condition=" '$(AtasSdkDir)' != '' and Exists('$(AtasSdkDir)\Atas.Types.dll') ">
+      <HintPath>$(AtasSdkDir)\Atas.Types.dll</HintPath>
       <Private>false</Private>
       <SpecificVersion>false</SpecificVersion>
     </Reference>
-    <Reference Include="Atas.Common" Condition=" '$(AtasSdkDir)' != '' and Exists('$(AtasSdkDir)\Atas.Common.dll') ">
-      <HintPath>$(AtasSdkDir)\Atas.Common.dll</HintPath>
+    <Reference Include="ATAS.Indicators.Technical" Condition=" '$(AtasSdkDir)' != '' and Exists('$(AtasSdkDir)\ATAS.Indicators.Technical.dll') ">
+      <HintPath>$(AtasSdkDir)\ATAS.Indicators.Technical.dll</HintPath>
+      <Private>false</Private>
+      <SpecificVersion>false</SpecificVersion>
+    </Reference>
+    <Reference Include="ATAS.Indicators.Other" Condition=" '$(AtasSdkDir)' != '' and Exists('$(AtasSdkDir)\ATAS.Indicators.Other.dll') ">
+      <HintPath>$(AtasSdkDir)\ATAS.Indicators.Other.dll</HintPath>
+      <Private>false</Private>
+      <SpecificVersion>false</SpecificVersion>
+    </Reference>
+    <Reference Include="ATAS.Strategies" Condition=" '$(AtasSdkDir)' != '' and Exists('$(AtasSdkDir)\ATAS.Strategies.dll') ">
+      <HintPath>$(AtasSdkDir)\ATAS.Strategies.dll</HintPath>
+      <Private>false</Private>
+      <SpecificVersion>false</SpecificVersion>
+    </Reference>
+    <Reference Include="ATAS.DataFeedsCore" Condition=" '$(AtasSdkDir)' != '' and Exists('$(AtasSdkDir)\ATAS.DataFeedsCore.dll') ">
+      <HintPath>$(AtasSdkDir)\ATAS.DataFeedsCore.dll</HintPath>
+      <Private>false</Private>
+      <SpecificVersion>false</SpecificVersion>
+    </Reference>
+    <Reference Include="ADataFeeder8" Condition=" '$(AtasSdkDir)' != '' and Exists('$(AtasSdkDir)\ADataFeeder8.dll') ">
+      <HintPath>$(AtasSdkDir)\ADataFeeder8.dll</HintPath>
       <Private>false</Private>
       <SpecificVersion>false</SpecificVersion>
     </Reference>
@@ -61,7 +91,7 @@
   </ItemGroup>
 
   <Target Name="CheckAtasSdk" BeforeTargets="Build">
-    <Error Condition=" '$(AtasSdkDir)' == '' " Text="未找到 ATAS SDK。请设置环境变量 ATAS_SDK_DIR 或安装到 Program Files / LocalAppData 之一。" />
-    <Error Condition=" !Exists('$(AtasSdkDir)\Atas.Indicators.dll') " Text="未发现 $(AtasSdkDir)\Atas.Indicators.dll ，请检查 ATAS 安装或设置 ATAS_SDK_DIR。" />
+    <Error Condition=" '$(AtasSdkDir)' == '' " Text="未找到 ATAS SDK。请安装 ATAS 或设置 ATAS_SDK_DIR。" />
+    <Error Condition=" !Exists('$(AtasSdkDir)\Atas.Indicators.dll') " Text="未发现 $(AtasSdkDir)\Atas.Indicators.dll，请检查安装或 ATAS_SDK_DIR。" />
   </Target>
 </Project>
