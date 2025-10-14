@@ -179,13 +179,25 @@ def _build_features(kline: pd.DataFrame, atas: pd.DataFrame) -> pd.DataFrame:
     merged = kline.join(atas, how="left")
     merged.sort_index(inplace=True)
 
+    atas_lowercase_map = {
+        column: column.lower()
+        for column in ["POC", "VAH", "VAL", "CVD", "Absorption"]
+        if column in merged.columns
+    }
+    if atas_lowercase_map:
+        merged.rename(columns=atas_lowercase_map, inplace=True)
+
     metrics_cols = [
         c
-        for c in ["MSI", "MFI", "KLI", "POC", "VAH", "VAL", "CVD", "Absorption"]
+        for c in ["MSI", "MFI", "KLI", "poc", "vah", "val", "cvd", "absorption"]
         if c in merged.columns
     ]
     if metrics_cols:
-        merged[metrics_cols] = merged[metrics_cols].ffill().fillna(0.0)
+        numeric_metrics = [c for c in ["poc", "vah", "val", "cvd", "absorption"] if c in metrics_cols]
+        for column in numeric_metrics:
+            merged.loc[:, column] = pd.to_numeric(merged[column], errors="coerce")
+        merged.loc[:, metrics_cols] = merged.loc[:, metrics_cols].ffill()
+        merged.loc[:, metrics_cols] = merged.loc[:, metrics_cols].fillna(0.0)
 
     if "close" not in merged.columns:
         raise ValueError("Kline data must contain a 'close' column to compute returns")
