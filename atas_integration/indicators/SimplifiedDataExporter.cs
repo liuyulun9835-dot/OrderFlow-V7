@@ -17,7 +17,7 @@ namespace AtasCustomIndicators
         private readonly object _syncRoot = new();
         private readonly Queue<(DateTimeOffset Timestamp, double Delta)> _rollingWindow = new();
         private readonly Dictionary<DateTimeOffset, ExportPayload> _pendingByMinute = new();
-        private readonly JsonSerializerSettings _serializerSettings;
+        private readonly string _logPath;
 
         private double _cumulativeDelta;
         private bool _jsonIndent;
@@ -25,9 +25,21 @@ namespace AtasCustomIndicators
         private SessionModeDefinition _sessionModeDefinition;
         private DateTimeOffset? _lastProcessedMinuteUtc;
         private DateTimeOffset? _sessionAnchorUtc;
+        private JsonSerializerSettings? _serializerSettings;
+        private bool _initialized;
+        private bool _firstOnCalculateLogged;
+        private bool _logDirectoryEnsured;
 
         public SimplifiedDataExporter()
         {
+            _logPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                "ATAS",
+                "Indicators",
+                "exporter.log");
+
+            Log("Constructor begin");
+
             Name = "SimplifiedDataExporter";
 
             _exportDir = Path.Combine(
@@ -41,14 +53,7 @@ namespace AtasCustomIndicators
             Backfill = false;
             JsonIndent = false;
 
-            _serializerSettings = new JsonSerializerSettings
-            {
-                ContractResolver = new CamelCasePropertyNamesContractResolver(),
-                FloatFormatHandling = FloatFormatHandling.Symbol,
-                DateFormatString = "o"
-            };
-
-            EnsureExportDirectory();
+            Log("Constructor end");
         }
 
         [DisplayName("SessionMode")]
@@ -83,7 +88,10 @@ namespace AtasCustomIndicators
             set
             {
                 _jsonIndent = value;
-                _serializerSettings.Formatting = _jsonIndent ? Formatting.Indented : Formatting.None;
+                if (_serializerSettings != null)
+                {
+                    _serializerSettings.Formatting = _jsonIndent ? Formatting.Indented : Formatting.None;
+                }
             }
         }
 
@@ -100,15 +108,26 @@ namespace AtasCustomIndicators
                 }
 
                 _exportDir = value;
-                EnsureExportDirectory();
             }
         }
+
+        [DisplayName("SafeMode")]
+        [Description("先以最小字段导出，排除初始化卡顿；确认无卡顿后再关闭")]
+        public bool SafeMode { get; set; } = true;
 
         private string ExporterVersion =>
             Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "0.0.0";
 
         protected override void OnCalculate(int bar, decimal value)
         {
+            var firstInvocation = false;
+            if (!_firstOnCalculateLogged)
+            {
+                firstInvocation = true;
+                _firstOnCalculateLogged = true;
+                Log("OnCalculate first begin");
+            }
+
             try
             {
                 if (bar < 0)
@@ -116,7 +135,27 @@ namespace AtasCustomIndicators
                     return;
                 }
 
-                if (WriteOnBarCloseOnly && bar != CurrentBar - 1 && !Backfill)
+                if (!_initialized)
+                {
+                    try
+                    {
+                        LazyInit();
+                    }
+                    catch (Exception initEx)
+                    {
+                        Log($"LazyInit error: {initEx}");
+                        return;
+                    }
+                }
+
+                var isCompletedBar = Backfill || bar == CurrentBar - 1;
+
+                if (SafeMode && !isCompletedBar)
+                {
+                    return;
+                }
+
+                if (WriteOnBarCloseOnly && !isCompletedBar)
                 {
                     return;
                 }
@@ -131,13 +170,33 @@ namespace AtasCustomIndicators
                 var minuteUtc = FloorToMinute(timestampUtc);
                 var outputTimestamp = FormatTimestamp(minuteUtc);
 
-                var poc = ExtractProfileValue(candle, "POC", "PointOfControl", "PriceOfControl");
-                var vah = ExtractProfileValue(candle, "VAH", "ValueAreaHigh");
-                var val = ExtractProfileValue(candle, "VAL", "ValueAreaLow");
-                var delta = ExtractDelta(candle);
-                var cvd = UpdateCvd(minuteUtc, delta);
+                double? poc = null;
+                double? vah = null;
+                double? val = null;
+                double? cvd = null;
+                var absorption = new AbsorptionResult(false, double.NaN, string.Empty);
+                double? delta = null;
 
-                var absorption = ExtractAbsorption(candle, delta, (double)candle.Volume);
+                if (!SafeMode)
+                {
+                    Log("Profile extraction begin");
+                    poc = ExtractProfileValue(candle, "POC", "PointOfControl", "PriceOfControl");
+                    vah = ExtractProfileValue(candle, "VAH", "ValueAreaHigh");
+                    val = ExtractProfileValue(candle, "VAL", "ValueAreaLow");
+                    Log("Profile extraction end");
+
+                    Log("Delta extraction begin");
+                    delta = ExtractDelta(candle);
+                    Log("Delta extraction end");
+
+                    Log("CVD update begin");
+                    cvd = UpdateCvd(minuteUtc, delta);
+                    Log("CVD update end");
+
+                    Log("Absorption evaluation begin");
+                    absorption = ExtractAbsorption(candle, delta, (double)candle.Volume);
+                    Log("Absorption evaluation end");
+                }
 
                 var payload = new ExportPayload
                 {
@@ -157,42 +216,61 @@ namespace AtasCustomIndicators
                     AbsorptionSide = absorption.Side
                 };
 
-                lock (_syncRoot)
+                _pendingByMinute[minuteUtc] = payload;
+                var completed = CollectCompletedMinutes(minuteUtc);
+                foreach (var ready in completed)
                 {
-                    _pendingByMinute[minuteUtc] = payload;
-                    FlushCompletedMinutes(minuteUtc);
+                    if (!SafeMode)
+                    {
+                        Log($"Write payload begin {ready.TimestampUtc:o}");
+                    }
+
+                    WritePayload(ready);
+
+                    if (!SafeMode)
+                    {
+                        Log($"Write payload end {ready.TimestampUtc:o}");
+                    }
                 }
             }
             catch (Exception ex)
             {
                 Log($"OnCalculate error: {ex}");
             }
+            finally
+            {
+                if (firstInvocation)
+                {
+                    Log("OnCalculate first end");
+                }
+            }
         }
 
-        private void FlushCompletedMinutes(DateTimeOffset currentMinuteUtc)
+        private List<ExportPayload> CollectCompletedMinutes(DateTimeOffset currentMinuteUtc)
         {
             var minutesToFlush = _pendingByMinute.Keys
                 .Where(minute => Backfill ? minute <= currentMinuteUtc : minute < currentMinuteUtc)
                 .OrderBy(minute => minute)
                 .ToList();
 
+            var ready = new List<ExportPayload>();
             foreach (var minute in minutesToFlush)
             {
                 if (_pendingByMinute.TryGetValue(minute, out var payload))
                 {
-                    WritePayload(payload);
+                    ready.Add(payload);
                     _pendingByMinute.Remove(minute);
                     _lastProcessedMinuteUtc = minute;
                 }
             }
+
+            return ready;
         }
 
         private void WritePayload(ExportPayload payload)
         {
             try
             {
-                EnsureExportDirectory();
-
                 var latestPath = Path.Combine(_exportDir, "latest.json");
                 var dayFile = Path.Combine(_exportDir, $"market_data_{payload.TimestampUtc:yyyyMMdd}.jsonl");
 
@@ -216,15 +294,48 @@ namespace AtasCustomIndicators
                     ["backfill"] = Backfill
                 };
 
+                if (_serializerSettings == null)
+                {
+                    Log("Serializer settings unavailable during WritePayload");
+                    return;
+                }
+
                 var json = JsonConvert.SerializeObject(document, _serializerSettings);
 
-                File.WriteAllText(latestPath, json);
-                File.AppendAllText(dayFile, json + Environment.NewLine);
+                lock (_syncRoot)
+                {
+                    File.WriteAllText(latestPath, json);
+                    File.AppendAllText(dayFile, json + Environment.NewLine);
+                }
             }
             catch (Exception ex)
             {
                 Log($"WritePayload error: {ex}");
             }
+        }
+
+        private void LazyInit()
+        {
+            if (_initialized)
+            {
+                return;
+            }
+
+            Log("LazyInit begin");
+
+            EnsureExportDirectory();
+
+            _serializerSettings = new JsonSerializerSettings
+            {
+                ContractResolver = new CamelCasePropertyNamesContractResolver(),
+                FloatFormatHandling = FloatFormatHandling.Symbol,
+                DateFormatString = "o",
+                Formatting = _jsonIndent ? Formatting.Indented : Formatting.None
+            };
+
+            _initialized = true;
+
+            Log("LazyInit end");
         }
 
         private DateTimeOffset ResolveUtcTimestamp(DateTime candleTime)
@@ -552,21 +663,18 @@ namespace AtasCustomIndicators
 
         private void ResetSession()
         {
-            lock (_syncRoot)
-            {
-                _cumulativeDelta = 0.0;
-                _rollingWindow.Clear();
-                _pendingByMinute.Clear();
-                _sessionAnchorUtc = null;
-                _lastProcessedMinuteUtc = null;
-            }
+            _cumulativeDelta = 0.0;
+            _rollingWindow.Clear();
+            _pendingByMinute.Clear();
+            _sessionAnchorUtc = null;
+            _lastProcessedMinuteUtc = null;
         }
 
         private void EnsureExportDirectory()
         {
             if (string.IsNullOrWhiteSpace(_exportDir))
             {
-                return;
+                throw new InvalidOperationException("Export directory path is not configured.");
             }
 
             try
@@ -576,6 +684,7 @@ namespace AtasCustomIndicators
             catch (Exception ex)
             {
                 Log($"EnsureExportDirectory error: {ex.Message}");
+                throw;
             }
         }
 
@@ -583,9 +692,18 @@ namespace AtasCustomIndicators
         {
             try
             {
-                EnsureExportDirectory();
-                var logPath = Path.Combine(_exportDir, $"exporter_{DateTime.UtcNow:yyyyMMdd}.log");
-                File.AppendAllText(logPath, $"{DateTime.UtcNow:o} {message}{Environment.NewLine}");
+                if (!_logDirectoryEnsured)
+                {
+                    var directory = Path.GetDirectoryName(_logPath);
+                    if (!string.IsNullOrWhiteSpace(directory))
+                    {
+                        Directory.CreateDirectory(directory);
+                    }
+
+                    _logDirectoryEnsured = true;
+                }
+
+                File.AppendAllText(_logPath, $"{DateTime.UtcNow:o} {message}{Environment.NewLine}");
             }
             catch
             {
@@ -659,7 +777,7 @@ namespace AtasCustomIndicators
         public double? Poc { get; set; }
         public double? Vah { get; set; }
         public double? Val { get; set; }
-        public double Cvd { get; set; }
+        public double? Cvd { get; set; }
         public bool AbsorptionDetected { get; set; }
         public double AbsorptionStrength { get; set; }
         public string? AbsorptionSide { get; set; }
