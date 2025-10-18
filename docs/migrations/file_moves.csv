@@ -1,0 +1,25 @@
+src_path,dst_path,action,notes
+preprocessing/fetch_kline.py,data/preprocessing/fetch_kline.py,git mv,align data ingestion layer
+preprocessing/gen_sessions.py,data/alignment/sessions.py,git mv+rename,session generator promoted to alignment package
+preprocessing/merge_to_features.py,data/alignment/merge_to_features.py,git mv,feature merge colocated with alignment
+preprocessing/calibration.py,data/calibration/calibration.py,git mv,calibration notebooks migrated to data layer
+preprocessing/schemas,data/preprocessing/schemas,git mv,schema assets housed with preprocessing
+preprocessing/utils,data/preprocessing/utils,git mv,utility helpers stay near ingestion
+models/NAMING.md,model/artifacts/NAMING.md,git mv,documentation aligned with artifacts
+scripts/,orderflow_v_6/cli/,git mv,entrypoint scripts colocated with package
+utils/,orderflow_v_6/utils/,git mv,shared utilities colocated with runtime package
+orderflow_v6/,orderflow_v_6/core/,git mv,package namespace unified
+validation/,orderflow_v_6/validation/,git mv,validation stack under package tree
+atas_integration/,orderflow_v_6/integrations/atas/,git mv,atas bridge nested under integrations
+results/.gitkeep,output/results/.gitkeep,git mv,results bucket canonical
+工程日志_order_flow_v_6_（_2025_10_15_）.md,docs/工程日志_order_flow_v_6_（_2025_10_15_）.md,git mv,engineering journal archived
+工程日志_order_flow_v_6_（_2025_10_17_).md,docs/工程日志_order_flow_v_6_（_2025_10_17_).md,git mv,engineering journal archived
+logs/,docs/logs/,git mv,consolidated operational logs
+releases/release.yml,output/report/release.yml,git mv,release manifest published under report channel
+results/*,output/results/*,git mv,batch results artifacts relocated
+results/bar_continuity_report.md,output/qa/bar_continuity_report.md,git mv,QA baseline now under qa bucket
+results/tick_quality_report.md,output/qa/tick_quality_report.md,git mv,QA baseline now under qa bucket
+results/precheck_costs_report.md,output/qa/cost_sensitivity.md,git mv+rename,cost sensitivity renamed for qa contract
+results/canary_switch_dryrun.md,output/qa/canary_switch_dryrun.md,git mv,canary dryrun grouped with qa evidence
+results/qc_summary.md,output/qa/qc_summary.md,git mv,qa summary relocated
+results/report.md.meta.json,output/report/INVESTIGATION.md.meta.json,git mv,report metadata folded into investigation log

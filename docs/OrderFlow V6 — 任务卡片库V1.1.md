@@ -69,8 +69,8 @@
 - **模块**：工程基线
 - **标题**：实验追踪与版本管理
 - **目标**：结果可复现、模型可回滚。
-- **输入**：Git、`results/`、`models/`
-- **输出**：`git tag` 规范、`models/*` 命名规范、`results/README.md`
+- **输入**：Git、`output/results/`、`models/`
+- **输出**：`git tag` 规范、`models/*` 命名规范、`output/results/README.md`
 - **关键步骤**：tag 语义化；模型与结果文件命名规则；随机种子记录脚本。
 - **DoD**：任一实验均可按 README 指示重跑并复现关键数值。
 - **负责人**：DevOps｜**优先级**：P1｜**依赖**：000｜**工时**：S
@@ -148,7 +148,7 @@
 - **标题**：成本字典（手续费/点差/滑点）
 - **目标**：三档成本配置（base/+50%/×2）。
 - **输入**：交易费用表
-- **输出**：`validation/configs/costs.yaml`
+- **输出**：`orderflow_v_6/validation/configs/costs.yaml`
 - **关键步骤**：抽象品种/账户级参数；校验与生效测试。
 - **DoD**：回测/验证可一键切换成本档。
 - **负责人**：量化研究｜**优先级**：P1｜**依赖**：104｜**工时**：S
@@ -190,17 +190,17 @@
 ### 卡片 108
 **【V1.1注释】**
 - 日报需新增 manifest 比对项（覆盖率/水位/Schema 版本）并在异常时触发重算流程。
-- 质控结果需回写至 `results/data_qc_report.md` 及日分区元数据，形成追踪闭环。
+- 质控结果需回写至 `output/results/data_qc_report.md` 及日分区元数据，形成追踪闭环。
 - 报警渠道需支持增量触发，只推送新增失败分区以降低噪音。
 **【V1.1补充-训练数据口径】**
 - **初始包**：QC 报告需覆盖全部初始日分区，并生成验收结论表（通过/需重跑）。
-- **增量包**：每日 QC 记录与 `update_*.json` 对齐，存档在 `results/qc/date=YYYY-MM-DD/`。
+- **增量包**：每日 QC 记录与 `update_*.json` 对齐，存档在 `output/qa/qc/date=YYYY-MM-DD/`。
 - **QC**：质控脚本需验证特征数一致、缺失率阈值、时间连续性；所有指标通过方可标记数据可用于训练/回测。
 - **模块**：数据
 - **标题**：数据完整性与异常检测
 - **目标**：自动质控日报。
 - **输入**：features.parquet
-- **输出**：`results/data_qc_report.md`
+- **输出**：`output/results/data_qc_report.md`
 - **关键步骤**：缺失、异常峰值、重复、时间跳变检测；邮件/IM 提醒。
 - **DoD**：日报生成且无阻塞项。
 - **负责人**：数据工程｜**优先级**：P1｜**依赖**：107｜**工时**：S
@@ -245,7 +245,7 @@
 - **负责人**：数据工程｜**优先级**：P0｜**依赖**：101,102,109｜**工时**：M
 - **风险&缓解**：ATAS 导出窗口受限→分批导出 + manifest 记录缺口；导出脚本异常→加入重试与告警。
 - **落盘路径**：`data/raw/atas/bar/`
-- **QA/工具**：Python/PySpark、Great Expectations、`scripts/batch_replay.{sh,bat}`
+- **QA/工具**：Python/PySpark、Great Expectations、`orderflow_v_6/cli/scripts/batch_replay.{sh,bat}`
 
 ### 卡片 112
 - **模块**：数据
@@ -261,14 +261,14 @@
 - **负责人**：数据工程｜**优先级**：P0｜**依赖**：101,109｜**工时**：M
 - **风险&缓解**：IO 峰值导致写入失败→预留缓存队列 + 分区限流；ATAS 断连→监控重连与补抓任务。
 - **落盘路径**：`data/raw/atas/tick/`
-- **QA/工具**：Python/Polars、AzCopy/Rclone、`validation/src/qc_report.py`
+- **QA/工具**：Python/Polars、AzCopy/Rclone、`orderflow_v_6/validation/src/qc_report.py`
 
 ### 卡片 115
 - **模块**：数据合并
 - **标题**：对齐索引与声明式合并
 - **目标**：建立分钟粒度“可用源/缺失掩码/质量标记”对齐索引表，统一合并入口。
 - **输入**：ATAS Bar/Tick 数据、Binance K 线、manifest 与水位
-- **输出**：`preprocessing/align/index.parquet`、`preprocessing/configs/merge.yaml`
+- **输出**：`data/alignment/index.parquet`、`data/alignment/configs/merge.yaml`
 - **关键步骤**：
   1) 生成 UTC、右闭左开边界的标准分钟索引，记录各来源可用性与缺失掩码；
   2) 在 `merge.yaml` 中声明来源优先级/降级策略（Tick>ATAS Bar>Binance）与准入阈值；
@@ -276,15 +276,15 @@
 - **DoD**：索引覆盖连续窗口；质量标记完整；一键生成多源合并样表。
 - **负责人**：数据工程｜**优先级**：P0｜**依赖**：111,112,104,110｜**工时**：M
 - **风险&缓解**：时间边界不一致→UTC 统一 + 单元测试覆盖；多源字段差异→配置化映射与校验。
-- **落盘路径**：`preprocessing/align/`、`preprocessing/configs/`
-- **QA/工具**：Pandas/Polars、Great Expectations、`validation/src/validate_json.py`
+- **落盘路径**：`data/alignment/`、`preprocessing/configs/`
+- **QA/工具**：Pandas/Polars、Great Expectations、`orderflow_v_6/validation/src/validate_json.py`
 
 ### 卡片 116
 - **模块**：映射/校准
 - **标题**：minute↔tick 特征映射与分布校准
 - **目标**：同名因子均值/方差校准、PSI/KS 漂移监控，产出映射与校准报告。
 - **输入**：`index.parquet`、合并后特征、ATAS Tick 特征
-- **输出**：`mapping_tick2bar.pkl`、`calibration_profile.json`、`results/merge_and_calibration_report.md`
+- **输出**：`mapping_tick2bar.pkl`、`calibration_profile.json`、`output/results/merge_and_calibration_report.md`
 - **关键步骤**：
   1) 在重叠窗口对 minute 与 tick 特征进行聚合与对齐，构建映射函数与补偿项；
   2) 计算 PSI/KS/ECE 等指标，识别漂移并记录降级策略；
@@ -292,15 +292,15 @@
 - **DoD**：映射/校准脚本可重现；报告包含 PSI/KS/ECE 指标与结论；降级策略清晰可追溯。
 - **负责人**：量化研究｜**优先级**：P0｜**依赖**：115,112｜**工时**：M
 - **风险&缓解**：重叠窗口不足→延长采集期 + 引入回放补齐；特征漂移剧烈→引入 HSMM 黏性与再校准计划。
-- **落盘路径**：`results/`、`preprocessing/align/`
-- **QA/工具**：Python/Scikit-learn、PSI/KS 工具包、`results/merge_and_calibration_report.md` 模板
+- **落盘路径**：`output/results/`、`data/alignment/`
+- **QA/工具**：Python/Scikit-learn、PSI/KS 工具包、`output/results/merge_and_calibration_report.md` 模板
 
 ### 卡片 118
 - **模块**：验证预检
 - **标题**：成本鲁棒与成交可达性闸门
 - **目标**：在进入 Validator v2 前完成 base/+50%/×2 成本与成交可达性预估，不达标不入主流程。
-- **输入**：`mapping_tick2bar.pkl`、`calibration_profile.json`、`validation/configs/costs.yaml`
-- **输出**：`validation/precheck/costs_gate.md`
+- **输入**：`mapping_tick2bar.pkl`、`calibration_profile.json`、`orderflow_v_6/validation/configs/costs.yaml`
+- **输出**：`orderflow_v_6/validation/precheck/costs_gate.md`
 - **关键步骤**：
   1) 构建分钟/逐笔级成交量覆盖与冲击惩罚估计，评估 base/+50%/×2 成本下的可执行性；
   2) 建立预检脚本，生成可执行性评分、成本敏感性曲线与准入判定；
@@ -308,7 +308,7 @@
 - **DoD**：预检脚本自动化；文档列出准入阈值与补救路径；未通过案例可复现阻断行为。
 - **负责人**：量化研究｜**优先级**：P0｜**依赖**：116,105｜**工时**：S
 - **风险&缓解**：成交数据偏差→引入冗余来源与置信区间；预估模型过拟合→留出独立窗口验证。
-- **落盘路径**：`validation/precheck/`
+- **落盘路径**：`orderflow_v_6/validation/precheck/`
 - **QA/工具**：Python/NumPy、敏感性仿真脚本、CI 集成测试
 
 ---
@@ -628,8 +628,8 @@
 - **模块**：执行
 - **标题**：AB 双源热切换
 - **目标**：双路 `state_inference` 接入，满足校准/鲁棒/可执行性后切主，异常可回滚。
-- **输入**：轨 A/B 状态流、`mapping_tick2bar.pkl`、`validation/precheck/costs_gate.md`
-- **输出**：`execution/switch_policy.yaml`、`logs/switch_audit/*.log`
+- **输入**：轨 A/B 状态流、`mapping_tick2bar.pkl`、`orderflow_v_6/validation/precheck/costs_gate.md`
+- **输出**：`execution/switch_policy.yaml`、`docs/logs/switch_audit/*.log`
 - **关键步骤**：
   1) 设计切换策略（准入阈值、观测窗口、回滚条件）并与 Validator 闸门对齐；
   2) 实现双源状态路由与健康检测，异常时自动退回轨 A；
@@ -637,7 +637,7 @@
 - **DoD**：热切换演练通过；切换/回滚日志完整；回滚后策略可恢复稳定；执行层接口兼容 V5。
 - **负责人**：执行工程｜**优先级**：P0｜**依赖**：603,118,405｜**工时**：M
 - **风险&缓解**：高频状态不稳定→设置观察期与分级降级策略；执行接口差异→提供模拟回放与接口适配层。
-- **落盘路径**：`execution/`、`logs/switch_audit/`
+- **落盘路径**：`execution/`、`docs/logs/switch_audit/`
 - **QA/工具**：回放模拟器、Chaos Testing、执行沙盒
 
 ---
@@ -727,7 +727,7 @@
 - **标题**：事件驱动回测器 & 规则归因
 - **目标**：收益/回撤/每规则贡献/状态分解。
 - **输入**：features、规则、成本
-- **输出**：`results/backtest_*` 图表与表格
+- **输出**：`output/results/backtest_*` 图表与表格
 - **关键步骤**：撮合/滑点/成本；按规则归因。
 - **DoD**：指标稳定；可复现实验。
 - **负责人**：策略开发｜**优先级**：P0｜**依赖**：506,651｜**工时**：L
@@ -779,7 +779,7 @@
 ### 卡片 803
 - **模块**：监控
 - **标题**：日终归档与日报
-- **目标**：`results/daily_report_YYYYMMDD.md` 自动产出。
+- **目标**：`output/results/daily_report_YYYYMMDD.md` 自动产出。
 - **输入**：交易与验证结果
 - **输出**：日报与归档
 - **关键步骤**：模板渲染；图表嵌入；上传归档。
@@ -790,8 +790,8 @@
 - **模块**：监控
 - **标题**：数据质量与健康度日报
 - **目标**：连续性/缺失/漂移/IO/延迟/报错闭环指标日报，形成统一健康面板。
-- **输入**：`preprocessing/align/index.parquet`、校准报告、数据管线日志
-- **输出**：`results/qc/date=YYYY-MM-DD/` 指标文件与 `qc_summary.md`
+- **输入**：`data/alignment/index.parquet`、校准报告、数据管线日志
+- **输出**：`output/qa/qc/date=YYYY-MM-DD/` 指标文件与 `qc_summary.md`
 - **关键步骤**：
   1) 聚合连续性、缺失率、对齐一致率、PSI/KS/ECE、IO 吞吐与延迟等指标；
   2) 渲染日报模板，包含告警阈值、历史对比、缺口补救状态；
@@ -799,7 +799,7 @@
 - **DoD**：日报在 T+1 10:00 前自动生成；异常有告警与补救记录；指标可追溯至原始数据切片。
 - **负责人**：DevOps｜**优先级**：P0｜**依赖**：115,116,118,803｜**工时**：M
 - **风险&缓解**：指标口径不一致→统一配置中心；数据延迟→引入缓冲 + 重跑机制；告警噪声→阈值动态调优。
-- **落盘路径**：`results/qc/`
+- **落盘路径**：`output/qa/qc/`
 - **QA/工具**：Great Expectations、CI 定时任务、Grafana/Metabase
 
 ---
@@ -830,7 +830,7 @@
 - **模块**：运维
 - **标题**：备份/恢复与崩溃自启
 - **目标**：模型/结果/日志安全；意外重启。
-- **输入**：`models/results/logs`
+- **输入**：`model/artifacts`、`output/results/logs`
 - **输出**：备份脚本、systemd/Compose 重启策略
 - **关键步骤**：周期归档；冷备；校验恢复流程。
 - **DoD**：灾备演练通过。

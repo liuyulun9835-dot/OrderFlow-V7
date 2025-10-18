@@ -1,0 +1,7 @@
+pattern,replacement,scope
+^from\s+preprocessing\.(.+),from data.preprocessing.\1,**/*.py
+^from\s+preprocessing\s+import\s+(.+),from data.preprocessing import \1,**/*.py
+^from\s+strategy_core\.decision_tree\.(.+),from decision.engine.\1,**/*.py
+^from\s+strategy_core\.(.+),from orderflow_v_6.core.\1,**/*.py
+^from\s+indicators\.(.+),from model.factors.\1,**/*.py
+\bimport\s+models?\b,from model.artifacts import *,**/*.py

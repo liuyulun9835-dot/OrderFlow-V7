@@ -1,0 +1,5 @@
+old_card,new_bucket,note
+000,D101,data prep fetch stream realignment
+101,D107,session alignment API rename
+205,M210,model artifact documentation consolidation
+607,E607,execution switch compliance trace moved to docs
