@@ -1,92 +1,87 @@
-# OrderFlow V6
+# OrderFlow V6（对齐《OrderFlow-V6项目说明书_修订_2.md》）
+<!-- WHY: 标题显式指向修订 2.0，方便版本识别。 -->
 
-## Project Overview
-OrderFlow V6 是一个以订单流与市场微结构为核心的多层交易研究与执行平台，强调“数据 → 指标 → 状态 → 验证 → 决策 → 执行”的分层架构，结合数据驱动、状态模型、统计控制与成本鲁棒特性实现可迁移的高频/中频策略能力。
+OrderFlow V6 是一个围绕“数据 → 指标 → 状态 → 验证 → 决策 → 执行”分层构建的订单流策略研究与发布平台，当前基线已同步至《OrderFlow-V6项目说明书_修订_2.md》与《OrderFlow V6 策略诊断与改进报告.txt》的要求，强化状态可解释性、方向性治理与上线闭环。
 
-## Inheritance
-系统延续了 V4/V5 中的因子模块、状态分类、决策树与风控执行接口，同时在 V6 中引入 HMM/TVTP/HSMM 状态模型、非线性概率与多维评分框架，并保持与既有执行/验证接口的兼容，内部实现升级为面向校准与多源状态的架构。
+## 核心设计（Revision 2.0）
+- **两态 TVTP-HMM**：`balance / trend`，以时变转移概率替代显式“过渡态”，通过多起点拟合与 AIC/BIC 稳健性验证提升辨识度。<!-- WHY: 说明移除三态建模的原因。 -->
+- **方向性判断器**：`transition(Si->Sj, prob>τ)` 触发后，利用 MFI/CVD/InformedFlow 等特征推断 bull/bear 与置信度，实现“进入趋势”与“做多/做空”解耦。<!-- WHY: 强调方向性层独立，支撑风险治理。 -->
+- **宏观慢变量驱动**：在 TVTP 转移与方向判别中注入平滑宏观因子（如 MA200、资金费率），降低短窗噪声与过拟合敏感度。<!-- WHY: 体现引入 features/macro_factor/* 的目的。 -->
+- **AB 双源热切换治理化**：`execution/switch_policy.yaml` 固化观察期/准入/回滚阈值，发布流水线绑定 PSI/KS/ECE 校验，确保带病回滚可追溯。<!-- WHY: 强调治理契约与发布绑定。 -->
 
-## Development Path
-V6 采用 Plan-A 的双轨渐进路线：
-- **轨道 A（Binance 低/中频）**：先构建稳定的状态机与验证闭环，输出基线状态源。
-- **轨道 B（ATAS Tick/L2 高频）**：持续滚动采集，完成 minute↔tick 映射与校准，在通过成本鲁棒与执行可达性闸门后热切换为主源。
-选择 Plan-A 的原因是“核心资产 = 系统 + 数据 + 校准器”，可长期沉淀跨粒度复用能力并降低状态源切换风险。
+## 文档与契约
+- 《OrderFlow-V6项目说明书_修订_2.md》：架构与任务卡片主干。
+- 《OrderFlow V6 策略诊断与改进报告.txt》：状态建模/方向性/治理改进建议。
+- 契约文件：`governance/RULES_library.yaml`、`governance/SCHEMA_model.json`、`governance/SCHEMA_decision.json`（均已扩展支持 TVTP 两态与方向判断器字段）。
+- 发布与验证产物：`output/publish_docs/VALIDATION.md`、`output/report/release.yml`、`execution/switch_policy.yaml`。
 
-## Data & Merging
-三类数据按照统一 UTC、右闭左开边界与 manifest 管理：
-- **ATAS Bar（≤3 个月）**：落地至 `data/raw/atas/bar/{symbol}/resolution={X}/date=YYYY-MM-DD/`，生成 `export_manifest.json` 与连续性报告。
-- **ATAS 真 Tick（7 天滚动）**：近窗 JSON，超窗转 Parquet 至 `data/raw/atas/tick/{symbol}/date=YYYY-MM-DD/`，每日产出 `tick_quality_report.md`。
-- **Binance 行情**：`data/exchange/{symbol}/kline_1m.parquet` 补足长期窗口。
-基于 `data/alignment/index.parquet` 与 `data/alignment/configs/merge.yaml` 构建可声明式的对齐索引，执行 Tick>ATAS Bar>Binance 的降级策略，并通过 `mapping_tick2bar.pkl`、`calibration_profile.json` 与 `output/results/merge_and_calibration_report.md` 固化 PSI/KS、置信度/ECE 校准及 HSMM 黏性策略。最终产出 `features_lowfreq.parquet`、`features_hft.parquet` 等命名规范的特征集。
+## 体系概览
+1. **数据与特征**：ATAS/Binance 数据通过 manifest 与 `data/alignment/index.parquet` 对齐，新增 `features/macro_factor/*` 输出宏观慢变量，为 TVTP 转移与方向层提供稳态驱动。
+2. **模型层**：`model/hmm_tvtp_hsmm/train_tvtp.py` 训练两态 TVTP-HMM，`model/hmm_tvtp_hsmm/state_inference.py` 暴露统一 `predict_proba` 接口，含转移概率与置信度。
+3. **决策层**：`decision/directional_classifier.py` 计算方向判别，`decision/engine` 依据规则与评分融合状态/方向信息。
+4. **验证与发布**：Validator 报告新增 bull/bear 分层与 TVTP 宏观对比摘要；`execution/switch_policy.yaml` 在发布流水线中校验绑定。
 
-## Validation
-Validator v2 结合单/多变量显著性、FDR、VIF 与成本鲁棒门槛，借助 `orderflow_v_6/validation/configs/validator_v2.yaml`、`orderflow_v_6/validation/src/qc_report.py` 等工具实现一键验证。新引入的 `orderflow_v_6/validation/precheck/costs_gate.md` 作为前置闸门，确保 base/+50%/×2 成本与成交可达性达标后方可进入 401–405 的完整验证流。
-
-## Execution
-执行层以 `decision/engine` 决策树和评分为核心，配合 `execution/switch_policy.yaml` 的 AB 双源热切换策略：当轨 B 满足校准/鲁棒/可执行性要求时切主，异常时回滚轨 A，并在 `docs/logs/switch_audit/` 中保留审计记录，兼容 V5 的执行接口以确保升级可控。
-
-## Milestones & Health Metrics
-已完成 000–108 的工程卡片、ATAS 导出与 Binance 历史拉取，实现最小闭环。健康度面板聚焦：连续性/缺失率、对齐一致率、PSI/KS/ECE、置信度校准、成本鲁棒通过率与执行可达性，指标成果将沉淀在 `output/qa/qc/`、`output/results/merge_and_calibration_report.md`、`orderflow_v_6/validation` 输出中。
-
-## Repo Structure
+## 目录结构（新增模块已归类）
 <!-- REPO_STRUCTURE_START -->
 
 ```
 /                                # 根目录：治理 / 控制 / 契约 层
 ├── governance/
-│   ├── CONTROL_naming.md
-│   ├── CONTROL_costs.yaml
 │   ├── CONTROL_switch_policy.yaml
-│   ├── RULES_library.yaml
-│   ├── SCHEMA_data.json
-│   ├── SCHEMA_features.json
-│   ├── SCHEMA_model.json
-│   ├── SCHEMA_decision.json
-│   └── SCHEMA_execution.json
+│   ├── RULES_library.yaml                  # 新增 transition 触发字段【2.0】
+│   ├── SCHEMA_model.json                   # 两态 TVTP + 宏观字段【2.0】
+│   └── SCHEMA_decision.json                # 触发/方向置信字段【2.0】
+├── features/
+│   ├── microflow/*
+│   └── macro_factor/*                      # 宏观慢变量特征【2.0】
+├── model/
+│   └── hmm_tvtp_hsmm/
+│       ├── train_tvtp.py                   # 2-State TVTP 训练【2.0】
+│       └── state_inference.py              # 状态/转移推断接口【2.0】
+├── decision/
+│   ├── directional_classifier.py           # 方向性判断器【2.0】
+│   └── engine/*
+├── execution/
+│   ├── switch/
+│   └── switch_policy.yaml                  # 发布绑定的 AB 热切换契约【2.0】
+├── validation/
+│   └── reports/*                           # Validator 分层与 TVTP 摘要【2.0】
 ├── output/
-│   ├── publish_docs/{ARCHITECTURE.md,VALIDATION.md,CHANGELOG.md,publish_docs_source.md}
-│   ├── qa/{qc_summary.md,validator_report.md,cost_sensitivity.md,qa_source_intent.md}
-│   ├── results/{merge_and_calibration_report.md,validator_report.md,qc_summary.md,results_source_intent.md}
-│   └── report/{release.yml,INVESTIGATION.md,report_source_intent.md}
+│   ├── publish_docs/{VALIDATION.md, ARCHITECTURE.md, release.yml}
+│   └── results/*
 ├── docs/
-│   └── migrations/{card_mapping.csv,file_moves.csv,import_rewrites.csv}
-├── orderflow_v_6/
-│   └── compat/__init__.py
+│   └── migrations/*
 ├── data/
 │   ├── raw/{exchange,atas/{bar,tick}}
 │   ├── preprocessing/{schemas,align}
 │   ├── calibration/
 │   ├── features/
 │   └── processed/
-├── model/{factors,hmm_tvpt_hsmm,calibration,artifacts}
-├── decision/{rules,scoring,engine,logs}
-├── execution/{risk,matching,routing,switch}
-└── makefile / pyproject.toml
+└── orderflow_v_6/*
 ```
 
 <!-- REPO_STRUCTURE_END -->
 
-关键目录与脚本：
-- [orderflow_v_6/integrations/atas/indicators/SimplifiedDataExporter.cs](orderflow_v_6/integrations/atas/indicators/SimplifiedDataExporter.cs)：ATAS 指标导出与回放配置。
-- [data/preprocessing/fetch_kline.py](data/preprocessing/fetch_kline.py)、[data/alignment/merge_to_features.py](data/alignment/merge_to_features.py)：行情抓取与特征合并脚本。
-- [orderflow_v_6/cli/scripts/init_data_tree.py](orderflow_v_6/cli/scripts/init_data_tree.py)：数据分层占位初始化。
-- [orderflow_v_6/validation/src/qc_report.py](orderflow_v_6/validation/src/qc_report.py)、[orderflow_v_6/validation/src/validate_json.py](orderflow_v_6/validation/src/validate_json.py)：数据质控与 schema 校验。
-- [output/results/README.md](output/results/README.md)：实验与报告复现指引。
-
-## Quickstart
+## Quickstart（与 2.0 对齐）
 1. 安装依赖：`poetry install`
 2. 初始化目录：`python orderflow_v_6/cli/scripts/init_data_tree.py`
-3. 拉取/追加行情并合并特征：
-   ```powershell
-   python orderflow_v_6/cli/scripts/update_pipeline.ps1 -Symbol BTCUSDT -Since 2024-01-01 -Until 2024-01-07
-   ```
-   `data/alignment/merge_to_features.py` 需显式传入 `--kline data/raw/exchange/BTCUSDT/kline_1m.parquet` 与 `--atas-dir data/raw/atas/bar/BTCUSDT`，默认 UTC 右闭左开。
-详细任务与路径请参考 [任务卡片库](docs/OrderFlow%20V6%20—%20任务卡片库V1.1.md) 与 [工程日志](工程日志_order_flow_v_6_（_2025_10_15_）.md)。
+3. 数据更新：`python orderflow_v_6/cli/scripts/update_pipeline.py --cfg configs/data/pipeline.yaml`
+4. 训练 TVTP：`python model/hmm_tvtp_hsmm/train_tvtp.py --cfg configs/model/tvtp.yaml`
+5. 状态推断：`python -c "from model.hmm_tvtp_hsmm.state_inference import predict_proba; print(predict_proba(...))"`
+6. 方向判别：`python decision/directional_classifier.py --snapshot snapshot.json`
+7. 验证报告：`python validation/src/run_validator.py --cfg validation/configs/validator_v2.yaml`
+8. 发布校验：`make release`（含 `execution/switch_policy.yaml` 绑定与 VALIDATION 摘要检查）
+<!-- WHY: 快速开始步骤覆盖训练/方向/发布流程，降低错配。 -->
 
 ## Results & Reports
-所有合并、校准、验证与 QC 报告需落盘至 `output/qa/` 与 `output/results/`：
-- `output/qa/bar_continuity_report.md` / `output/qa/tick_quality_report.md`：连续性与 tick 质量基线。
-- `output/results/merge_and_calibration_report.md`：minute↔tick 映射与分层校准结论。
-- `output/qa/cost_sensitivity.md`：成本闸门敏感度曲线。
-- `output/qa/canary_switch_dryrun.md`：热切换策略干跑结果。
-更多复现指引见 [output/results/README.md](output/results/README.md)。
+- `output/publish_docs/VALIDATION.md`：含 bull/bear 分层统计与 TVTP 宏观对比摘要。
+- `output/report/release.yml`：记录发布批次与 `execution/switch_policy.yaml` 绑定信息。
+- `output/results/merge_and_calibration_report.md`：校准与转移概率驱动分析。
+- `output/qa/canary_switch_dryrun.md`：AB 热切换干跑与回滚演练结果。
+- `output/results/directional_evaluation.md`：方向性判断器 ROC/AUC 与收益一致性评估。
+
+## 兼容与迁移（2.0）
+- 移除“三态”措辞与配置，统一为两态 TVTP-HMM，旧模型需重新训练。
+- 新增宏观驱动、方向判别相关字段（如 `macro_factor_used`、`directional_classifier`）均向后兼容，旧产出可缺省。
+- 发布流程需在 `make release` 中验证 `execution/switch_policy.yaml` 与最新 Validator 报告一致，避免带病上线。
+- Validator/报告需补充 bull/bear 分层统计与宏观对比摘要，以满足治理追溯要求。
