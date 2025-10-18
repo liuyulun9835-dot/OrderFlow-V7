@@ -1,1 +1,15 @@
-# placeholder for SCHEMA_decision.json
+{
+  "trigger": {
+    "type": "transition",
+    "from": "balance",
+    "to": "trend",
+    "prob": 0.86,
+    "threshold": 0.8
+  },
+  "directional_classifier": {
+    "label": "bullish",
+    "confidence": 0.91,
+    "inputs": ["MFI", "CVD", "informed_flow_proxy"]
+  },
+  "macro_factor_used": "MA_ratio"
+}

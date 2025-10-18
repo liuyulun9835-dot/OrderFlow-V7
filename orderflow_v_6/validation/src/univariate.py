@@ -17,6 +17,27 @@ class UnivariateTestResult:
     rejected: bool
 
 
+def _summary_stats(sample: Sequence[float]) -> dict[str, float]:
+    array = np.asarray(sample, dtype=float)
+    if array.size == 0:
+        return {"n": 0, "mean": float("nan"), "std": float("nan")}
+    return {
+        "n": int(array.size),
+        "mean": float(np.nanmean(array)),
+        "std": float(np.nanstd(array)),
+    }
+
+
+def directional_breakdown(bull_sample: Sequence[float], bear_sample: Sequence[float]) -> dict[str, dict[str, float]]:
+    """Compute bull/bear descriptive statistics for validator reporting.
+
+    WHY: README and governance documents require directionally stratified validation.
+    This helper keeps the logic close to other univariate utilities.
+    """
+
+    return {"bull": _summary_stats(bull_sample), "bear": _summary_stats(bear_sample)}
+
+
 def cohen_d(sample_a: Sequence[float], sample_b: Sequence[float]) -> float:
     a = np.asarray(sample_a, dtype=float)
     b = np.asarray(sample_b, dtype=float)
@@ -48,5 +69,5 @@ def evaluate_tests(names: Sequence[str], p_values: Sequence[float], effects: Seq
     ]
 
 
-__all__ = ["UnivariateTestResult", "cohen_d", "fdr_bh", "evaluate_tests"]
+__all__ = ["UnivariateTestResult", "cohen_d", "fdr_bh", "evaluate_tests", "directional_breakdown"]
 
