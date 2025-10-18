@@ -5,3 +5,4 @@ pattern,replacement,scope
 ^from\s+strategy_core\.(.+),from orderflow_v_6.core.\1,**/*.py
 ^from\s+indicators\.(.+),from model.factors.\1,**/*.py
 \bimport\s+models?\b,from model.artifacts import *,**/*.py
+(['"])(CONTROL_|RULES_|SCHEMA_)([a-zA-Z0-9_\.-]+)(['"]),\1governance/\2\3\4,**/*.{py,yaml,yml,json,md}
