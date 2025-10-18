@@ -16,6 +16,21 @@ class MultivariateTestResult:
     rejected: bool
 
 
+def directional_covariance(bull_vectors: Sequence[Sequence[float]], bear_vectors: Sequence[Sequence[float]]) -> dict[str, list[list[float]]]:
+    """Compute covariance matrices for bull/bear segments.
+
+    WHY: Governance requires reporting multivariate dispersion conditioned on direction.
+    """
+
+    def cov(matrix: Sequence[Sequence[float]]) -> list[list[float]]:
+        arr = np.asarray(matrix, dtype=float)
+        if arr.size == 0:
+            return []
+        return np.cov(arr, rowvar=False).tolist()
+
+    return {"bull": cov(bull_vectors), "bear": cov(bear_vectors)}
+
+
 def max_t_threshold(statistics: Sequence[float], simulations: Iterable[Sequence[float]], alpha: float = 0.05) -> float:
     maxima = []
     for sample in simulations:
@@ -40,5 +55,5 @@ def evaluate_max_t(names: Sequence[str], statistics: Sequence[float], simulation
     return results
 
 
-__all__ = ["MultivariateTestResult", "max_t_threshold", "evaluate_max_t"]
+__all__ = ["MultivariateTestResult", "max_t_threshold", "evaluate_max_t", "directional_covariance"]
 

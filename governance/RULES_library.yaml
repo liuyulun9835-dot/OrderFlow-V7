@@ -1,1 +1,11 @@
-# placeholder for RULES_library.yaml
+# WHY: Provide governance-approved rule snippets for transition-based policies.
+- id: enter_trend_generic
+  when: transition(balance->trend, prob>0.80)
+  then:
+    directional: use_classifier
+    risk_cap: mid
+- id: enter_trend_high_confidence
+  when: transition(balance->trend, prob>0.90, min_dur: 5)
+  then:
+    directional: use_classifier
+    risk_cap: high

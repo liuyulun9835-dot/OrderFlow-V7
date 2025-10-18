@@ -36,3 +36,7 @@ ci_gates:
     description: "COMPLIANCE.md / docs/traceability.md / releases/release.yml 必须存在且包含关键字"
   - check: signature_consistency
     description: "data_manifest_hash & calibration_hash 必须与结果文件一致"
+  - check: governance_schemas_filled
+    description: "SCHEMA_model.json / SCHEMA_decision.json / RULES_library.yaml 不得为 placeholder"
+  - check: directional_reports_present
+    description: "VALIDATION.md 必须包含 bull/bear 分层与 TVTP 宏观对比摘要（或链接到生成物）"
