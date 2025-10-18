@@ -29,19 +29,42 @@ Validator v2 结合单/多变量显著性、FDR、VIF 与成本鲁棒门槛，�
 已完成 000–108 的工程卡片、ATAS 导出与 Binance 历史拉取，实现最小闭环。健康度面板聚焦：连续性/缺失率、对齐一致率、PSI/KS/ECE、置信度校准、成本鲁棒通过率与执行可达性，指标成果将沉淀在 `output/qa/qc/`、`output/results/merge_and_calibration_report.md`、`orderflow_v_6/validation` 输出中。
 
 ## Repo Structure
-```text
-OrderFlow-V6/
-├── data/
-├── decision/
-├── docs/
-├── execution/
-├── model/
-├── orderflow_v_6/
-├── output/
-├── CONTROL_*.md / CONTROL_*.yaml
-├── RULES_library.yaml
-└── SCHEMA_*.json
+<!-- REPO_STRUCTURE_START -->
+
 ```
+/                                # 根目录：治理 / 控制 / 契约 层
+├── governance/
+│   ├── CONTROL_naming.md
+│   ├── CONTROL_costs.yaml
+│   ├── CONTROL_switch_policy.yaml
+│   ├── RULES_library.yaml
+│   ├── SCHEMA_data.json
+│   ├── SCHEMA_features.json
+│   ├── SCHEMA_model.json
+│   ├── SCHEMA_decision.json
+│   └── SCHEMA_execution.json
+├── output/
+│   ├── publish_docs/{ARCHITECTURE.md,VALIDATION.md,CHANGELOG.md,publish_docs_source.md}
+│   ├── qa/{qc_summary.md,validator_report.md,cost_sensitivity.md,qa_source_intent.md}
+│   ├── results/{merge_and_calibration_report.md,validator_report.md,qc_summary.md,results_source_intent.md}
+│   └── report/{release.yml,INVESTIGATION.md,report_source_intent.md}
+├── docs/
+│   └── migrations/{card_mapping.csv,file_moves.csv,import_rewrites.csv}
+├── orderflow_v_6/
+│   └── compat/__init__.py
+├── data/
+│   ├── raw/{exchange,atas/{bar,tick}}
+│   ├── preprocessing/{schemas,align}
+│   ├── calibration/
+│   ├── features/
+│   └── processed/
+├── model/{factors,hmm_tvpt_hsmm,calibration,artifacts}
+├── decision/{rules,scoring,engine,logs}
+├── execution/{risk,matching,routing,switch}
+└── makefile / pyproject.toml
+```
+
+<!-- REPO_STRUCTURE_END -->
 
 关键目录与脚本：
 - [orderflow_v_6/integrations/atas/indicators/SimplifiedDataExporter.cs](orderflow_v_6/integrations/atas/indicators/SimplifiedDataExporter.cs)：ATAS 指标导出与回放配置。
