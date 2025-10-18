@@ -17,57 +17,53 @@ V6 采用 Plan-A 的双轨渐进路线：
 - **ATAS Bar（≤3 个月）**：落地至 `data/raw/atas/bar/{symbol}/resolution={X}/date=YYYY-MM-DD/`，生成 `export_manifest.json` 与连续性报告。
 - **ATAS 真 Tick（7 天滚动）**：近窗 JSON，超窗转 Parquet 至 `data/raw/atas/tick/{symbol}/date=YYYY-MM-DD/`，每日产出 `tick_quality_report.md`。
 - **Binance 行情**：`data/exchange/{symbol}/kline_1m.parquet` 补足长期窗口。
-基于 `preprocessing/align/index.parquet` 与 `preprocessing/configs/merge.yaml` 构建可声明式的对齐索引，执行 Tick>ATAS Bar>Binance 的降级策略，并通过 `mapping_tick2bar.pkl`、`calibration_profile.json` 与 `results/merge_and_calibration_report.md` 固化 PSI/KS、置信度/ECE 校准及 HSMM 黏性策略。最终产出 `features_lowfreq.parquet`、`features_hft.parquet` 等命名规范的特征集。
+基于 `data/alignment/index.parquet` 与 `data/alignment/configs/merge.yaml` 构建可声明式的对齐索引，执行 Tick>ATAS Bar>Binance 的降级策略，并通过 `mapping_tick2bar.pkl`、`calibration_profile.json` 与 `output/results/merge_and_calibration_report.md` 固化 PSI/KS、置信度/ECE 校准及 HSMM 黏性策略。最终产出 `features_lowfreq.parquet`、`features_hft.parquet` 等命名规范的特征集。
 
 ## Validation
-Validator v2 结合单/多变量显著性、FDR、VIF 与成本鲁棒门槛，借助 `validation/configs/validator_v2.yaml`、`validation/src/qc_report.py` 等工具实现一键验证。新引入的 `validation/precheck/costs_gate.md` 作为前置闸门，确保 base/+50%/×2 成本与成交可达性达标后方可进入 401–405 的完整验证流。
+Validator v2 结合单/多变量显著性、FDR、VIF 与成本鲁棒门槛，借助 `orderflow_v_6/validation/configs/validator_v2.yaml`、`orderflow_v_6/validation/src/qc_report.py` 等工具实现一键验证。新引入的 `orderflow_v_6/validation/precheck/costs_gate.md` 作为前置闸门，确保 base/+50%/×2 成本与成交可达性达标后方可进入 401–405 的完整验证流。
 
 ## Execution
-执行层以 `strategy_core` 决策树和评分为核心，配合 `execution/switch_policy.yaml` 的 AB 双源热切换策略：当轨 B 满足校准/鲁棒/可执行性要求时切主，异常时回滚轨 A，并在 `logs/switch_audit/` 中保留审计记录，兼容 V5 的执行接口以确保升级可控。
+执行层以 `decision/engine` 决策树和评分为核心，配合 `execution/switch_policy.yaml` 的 AB 双源热切换策略：当轨 B 满足校准/鲁棒/可执行性要求时切主，异常时回滚轨 A，并在 `docs/logs/switch_audit/` 中保留审计记录，兼容 V5 的执行接口以确保升级可控。
 
 ## Milestones & Health Metrics
-已完成 000–108 的工程卡片、ATAS 导出与 Binance 历史拉取，实现最小闭环。健康度面板聚焦：连续性/缺失率、对齐一致率、PSI/KS/ECE、置信度校准、成本鲁棒通过率与执行可达性，指标成果将沉淀在 `results/qc/`、`results/merge_and_calibration_report.md`、`validation` 输出中。
+已完成 000–108 的工程卡片、ATAS 导出与 Binance 历史拉取，实现最小闭环。健康度面板聚焦：连续性/缺失率、对齐一致率、PSI/KS/ECE、置信度校准、成本鲁棒通过率与执行可达性，指标成果将沉淀在 `output/qa/qc/`、`output/results/merge_and_calibration_report.md`、`orderflow_v_6/validation` 输出中。
 
 ## Repo Structure
 ```text
 OrderFlow-V6/
-├── atas_integration/
 ├── data/
+├── decision/
 ├── docs/
 ├── execution/
-├── logs/
-├── models/
-├── orderflow_v6/
-├── preprocessing/
-├── results/
-├── scripts/
-├── strategy_core/
-├── tests/
-├── utils/
-└── validation/
+├── model/
+├── orderflow_v_6/
+├── output/
+├── CONTROL_*.md / CONTROL_*.yaml
+├── RULES_library.yaml
+└── SCHEMA_*.json
 ```
 
 关键目录与脚本：
-- [atas_integration/indicators/SimplifiedDataExporter.cs](atas_integration/indicators/SimplifiedDataExporter.cs)：ATAS 指标导出与回放配置。
-- [preprocessing/fetch_kline.py](preprocessing/fetch_kline.py)、[preprocessing/merge_to_features.py](preprocessing/merge_to_features.py)：行情抓取与特征合并脚本。
-- [scripts/init_data_tree.py](scripts/init_data_tree.py)：数据分层占位初始化。
-- [validation/src/qc_report.py](validation/src/qc_report.py)、[validation/src/validate_json.py](validation/src/validate_json.py)：数据质控与 schema 校验。
-- [results/README.md](results/README.md)：实验与报告复现指引。
+- [orderflow_v_6/integrations/atas/indicators/SimplifiedDataExporter.cs](orderflow_v_6/integrations/atas/indicators/SimplifiedDataExporter.cs)：ATAS 指标导出与回放配置。
+- [data/preprocessing/fetch_kline.py](data/preprocessing/fetch_kline.py)、[data/alignment/merge_to_features.py](data/alignment/merge_to_features.py)：行情抓取与特征合并脚本。
+- [orderflow_v_6/cli/scripts/init_data_tree.py](orderflow_v_6/cli/scripts/init_data_tree.py)：数据分层占位初始化。
+- [orderflow_v_6/validation/src/qc_report.py](orderflow_v_6/validation/src/qc_report.py)、[orderflow_v_6/validation/src/validate_json.py](orderflow_v_6/validation/src/validate_json.py)：数据质控与 schema 校验。
+- [output/results/README.md](output/results/README.md)：实验与报告复现指引。
 
 ## Quickstart
 1. 安装依赖：`poetry install`
-2. 初始化目录：`python scripts/init_data_tree.py`
+2. 初始化目录：`python orderflow_v_6/cli/scripts/init_data_tree.py`
 3. 拉取/追加行情并合并特征：
    ```powershell
-   python scripts/update_pipeline.ps1 -Symbol BTCUSDT -Since 2024-01-01 -Until 2024-01-07
+   python orderflow_v_6/cli/scripts/update_pipeline.ps1 -Symbol BTCUSDT -Since 2024-01-01 -Until 2024-01-07
    ```
-   `preprocessing/merge_to_features.py` 需显式传入 `--kline data/exchange/BTCUSDT/kline_1m.parquet` 与 `--atas-dir data/raw/atas/bar/BTCUSDT`，默认 UTC 右闭左开。
+   `data/alignment/merge_to_features.py` 需显式传入 `--kline data/raw/exchange/BTCUSDT/kline_1m.parquet` 与 `--atas-dir data/raw/atas/bar/BTCUSDT`，默认 UTC 右闭左开。
 详细任务与路径请参考 [任务卡片库](docs/OrderFlow%20V6%20—%20任务卡片库V1.1.md) 与 [工程日志](工程日志_order_flow_v_6_（_2025_10_15_）.md)。
 
 ## Results & Reports
-所有合并、校准、验证与 QC 报告需落盘至 `results/`：
-- `results/bar_continuity_report.md` / `results/tick_quality_report.md`：连续性与 tick 质量基线。
-- `results/merge_and_calibration_report.md`：minute↔tick 映射与分层校准结论。
-- `results/precheck_costs_report.md`：成本闸门敏感度曲线。
-- `results/canary_switch_dryrun.md`：热切换策略干跑结果。
-更多复现指引见 [results/README.md](results/README.md)。
+所有合并、校准、验证与 QC 报告需落盘至 `output/qa/` 与 `output/results/`：
+- `output/qa/bar_continuity_report.md` / `output/qa/tick_quality_report.md`：连续性与 tick 质量基线。
+- `output/results/merge_and_calibration_report.md`：minute↔tick 映射与分层校准结论。
+- `output/qa/cost_sensitivity.md`：成本闸门敏感度曲线。
+- `output/qa/canary_switch_dryrun.md`：热切换策略干跑结果。
+更多复现指引见 [output/results/README.md](output/results/README.md)。
