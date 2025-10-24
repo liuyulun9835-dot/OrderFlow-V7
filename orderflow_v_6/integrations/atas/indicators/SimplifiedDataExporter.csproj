@@ -3,11 +3,11 @@
     <TargetFramework>net472</TargetFramework>
     <OutputType>Library</OutputType>
     <!-- 改装配名以携带新身份 -->
-    <AssemblyName>SimplifiedDataExporter.V62</AssemblyName>
-    <Version>6.2.0.0</Version>
-    <AssemblyVersion>6.2.0.0</AssemblyVersion>
-    <FileVersion>6.2.0.0</FileVersion>
-    <RootNamespace>AtasCustomIndicators.V62</RootNamespace>
+    <AssemblyName>SimplifiedDataExporter.V63</AssemblyName>
+    <Version>6.3.0.0</Version>
+    <AssemblyVersion>6.3.0.0</AssemblyVersion>
+    <FileVersion>6.3.0.0</FileVersion>
+    <RootNamespace>AtasCustomIndicators.V63</RootNamespace>
     <Configurations>Debug;Release</Configurations>
     <Platforms>AnyCPU</Platforms>
     <LangVersion>latest</LangVersion>
@@ -122,6 +122,6 @@
 
   <!-- 额外的输出文件名（双保险） -->
   <Target Name="RenameOutput" AfterTargets="Build">
-    <Copy SourceFiles="$(TargetPath)" DestinationFiles="$(TargetDir)SimplifiedDataExporter_v62_$(FileVersion).dll" OverwriteReadOnlyFiles="true" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFiles="$(TargetDir)SimplifiedDataExporter_v63_$(FileVersion).dll" OverwriteReadOnlyFiles="true" />
   </Target>
 </Project>

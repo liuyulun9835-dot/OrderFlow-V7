@@ -8,12 +8,12 @@ using System.Reflection;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
 
-namespace AtasCustomIndicators.V62
+namespace AtasCustomIndicators.V63
 {
     // 类名改为带版本后缀，避免与旧类型冲突
-    public class SimplifiedDataExporterV62 : ATAS.Indicators.Indicator
+    public class SimplifiedDataExporterV63 : ATAS.Indicators.Indicator
     {
-        private const string SchemaVersion = "v6.2";
+        private const string SchemaVersion = "v6.3";
         private readonly object _syncRoot = new();
         private readonly Queue<(DateTimeOffset Timestamp, double Delta)> _rollingWindow = new();
         private readonly Dictionary<DateTimeOffset, ExportPayload> _pendingByMinute = new();
@@ -30,9 +30,8 @@ namespace AtasCustomIndicators.V62
         private bool _firstOnCalculateLogged;
         private bool _logDirectoryEnsured;
         private long _flushSequence;
-        private bool _probed;  // 仅首根完成bar做一次深度探针
 
-        public SimplifiedDataExporterV62()
+        public SimplifiedDataExporterV63()
         {
             _logPath = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
@@ -42,17 +41,8 @@ namespace AtasCustomIndicators.V62
 
             Log("Constructor begin");
 
-<<<<<<< HEAD
             // 指标显示名也改为新标识
-            Name = "SimplifiedDataExporter_v62";
-=======
-<<<<<<< HEAD
-            Name = "SimplifiedDataExporter_v6p";
-=======
-            // 指标显示名也改为新标识
-            Name = "SimplifiedDataExporter_v62";
->>>>>>> 1a09128 (update: revised SimplifiedDataExporter indicator code)
->>>>>>> 134adad (update: revised SimplifiedDataExporter indicator code)
+            Name = "SimplifiedDataExporter_v63";
 
             _exportDir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
@@ -219,89 +209,85 @@ namespace AtasCustomIndicators.V62
                     Log("Absorption evaluation end");
                 }
 
-<<<<<<< HEAD
-                // ---- 单bar体积峰值（只在 SafeMode=false 时计算）----
-                double? barVpoPrice = null, barVpoVol = null, barVpoLoc = null; string? barVpoSide = null;
-                if (!SafeMode)
-=======
-<<<<<<< HEAD
-                // VPO 只在 SafeMode=false 时计算，避免初始化期卡顿
+                // ---- 单bar体积峰值（先尝试SDK反射，失败再回退容器猜名）----
                 double? barVpoPrice = null, barVpoVol = null, barVpoLoc = null;
                 string? barVpoSide = null;
-                if (!SafeMode && TryGetVolumeAtPrice(candle, out var vaps) && vaps.Count > 0)
->>>>>>> 134adad (update: revised SimplifiedDataExporter indicator code)
-                {
-                    Log("[VPO] begin");
-                    if (TryGetVolumeAtPrice(candle, out var vaps) && vaps.Count > 0)
-                    {
-                        Log($"[VPO] vaps_found={vaps.Count}");
-                        var max = vaps.Aggregate((a, b) => a.vol >= b.vol ? a : b);
-                        barVpoPrice = max.price; barVpoVol = max.vol;
-                        var low = (double)candle.Low; var high = (double)candle.High;
-                        if (high > low) barVpoLoc = Math.Max(0.0, Math.Min(1.0, (barVpoPrice.GetValueOrDefault() - low) / (high - low)));
-                        if (!double.IsNaN(max.ask) && !double.IsNaN(max.bid))
-                            barVpoSide = max.ask > max.bid ? "bull" : max.bid > max.ask ? "bear" : "neutral";
-                        Log($"[VPO] max price={barVpoPrice} vol={barVpoVol} loc={barVpoLoc} side={barVpoSide}");
-                    }
-                    else
-                    {
-                        Log("[VPO] vaps not found");
-                    }
 
-<<<<<<< HEAD
-=======
-                    var low = (double)candle.Low;
-                    var high = (double)candle.High;
-                    if (high > low)
-                        barVpoLoc = Math.Max(0.0, Math.Min(1.0, (barVpoPrice - low) / (high - low))); // clamp
-
-                    if (!double.IsNaN(max.ask) && !double.IsNaN(max.bid))
-                        barVpoSide = max.ask > max.bid ? "bull" : max.bid > max.ask ? "bear" : "neutral";
-=======
-                // ---- 单bar体积峰值（只在 SafeMode=false 时计算）----
-                double? barVpoPrice = null, barVpoVol = null, barVpoLoc = null; string? barVpoSide = null;
                 if (!SafeMode)
                 {
                     Log("[VPO] begin");
-                    if (TryGetVolumeAtPrice(candle, out var vaps) && vaps.Count > 0)
+                    var candleType = candle.GetType();
+
+                    // 1) SDK 反射：candle.MaxVolumePriceInfo
+                    try
                     {
-                        Log($"[VPO] vaps_found={vaps.Count}");
-                        var max = vaps.Aggregate((a, b) => a.vol >= b.vol ? a : b);
-                        barVpoPrice = max.price; barVpoVol = max.vol;
-                        var low = (double)candle.Low; var high = (double)candle.High;
-                        if (high > low) barVpoLoc = Math.Max(0.0, Math.Min(1.0, (barVpoPrice.GetValueOrDefault() - low) / (high - low)));
-                        if (!double.IsNaN(max.ask) && !double.IsNaN(max.bid))
-                            barVpoSide = max.ask > max.bid ? "bull" : max.bid > max.ask ? "bear" : "neutral";
-                        Log($"[VPO] max price={barVpoPrice} vol={barVpoVol} loc={barVpoLoc} side={barVpoSide}");
+                        var pi = candleType.GetProperty("MaxVolumePriceInfo", BindingFlags.Public | BindingFlags.Instance);
+                        var info = pi?.GetValue(candle);
+                        if (info != null)
+                        {
+                            var pPrice = info.GetType().GetProperty("Price");
+                            var pVol = info.GetType().GetProperty("Volume");
+                            var pBid = info.GetType().GetProperty("Bid");
+                            var pAsk = info.GetType().GetProperty("Ask");
+
+                            barVpoPrice = SafeConvertToDouble(pPrice?.GetValue(info));
+                            barVpoVol = SafeConvertToDouble(pVol?.GetValue(info));
+                            var bid = SafeConvertToDouble(pBid?.GetValue(info));
+                            var ask = SafeConvertToDouble(pAsk?.GetValue(info));
+
+                            var low = Convert.ToDouble(candleType.GetProperty("Low")?.GetValue(candle) ?? double.NaN, CultureInfo.InvariantCulture);
+                            var high = Convert.ToDouble(candleType.GetProperty("High")?.GetValue(candle) ?? double.NaN, CultureInfo.InvariantCulture);
+                            if (barVpoPrice.HasValue && high > low)
+                            {
+                                barVpoLoc = Math.Max(0.0, Math.Min(1.0, (barVpoPrice.Value - low) / (high - low)));
+                            }
+
+                            if (ask.HasValue && bid.HasValue && !double.IsNaN(ask.Value) && !double.IsNaN(bid.Value))
+                            {
+                                var askValue = ask.Value;
+                                var bidValue = bid.Value;
+                                barVpoSide = askValue > bidValue ? "bull" : bidValue > askValue ? "bear" : "neutral";
+                            }
+
+                            Log($"[VPO] SDK Hit: price={barVpoPrice} vol={barVpoVol} side={barVpoSide}");
+                        }
+                        else
+                        {
+                            Log("[VPO] SDK Miss: MaxVolumePriceInfo is null");
+                        }
                     }
-                    else
+                    catch (Exception ex)
                     {
-                        Log("[VPO] vaps not found");
+                        Log($"[VPO] SDK access error: {ex.Message}");
                     }
 
->>>>>>> 134adad (update: revised SimplifiedDataExporter indicator code)
-                    // 首根完成 bar 做一次深度探针（只执行一次）
-                    if (!_probed)
+                    // 2) 回退：常见容器（Clusters/Footprint/VolumeAtPrices/PriceLevels）
+                    if (!barVpoPrice.HasValue)
                     {
-                        try
+                        if (TryGetVolumeAtPrice(candle, out var vaps) && vaps.Count > 0)
                         {
-                            _probed = true;
-                            TryDumpProperty(candle, "Footprint");
-                            TryDumpProperty(candle, "Clusters");
-                            TryDumpProperty(candle, "Cluster");
-                            TryDumpProperty(candle, "VolumeAtPrice");
-                            TryDumpProperty(candle, "VolumeAtPrices");
-                            TryDumpProperty(candle, "PriceLevels");
+                            Log($"[VPO] Fallback vaps_found={vaps.Count}");
+                            var max = vaps.Aggregate((a, b) => a.vol >= b.vol ? a : b);
+                            barVpoPrice = max.price;
+                            barVpoVol = max.vol;
+
+                            var low = Convert.ToDouble(candleType.GetProperty("Low")?.GetValue(candle) ?? double.NaN, CultureInfo.InvariantCulture);
+                            var high = Convert.ToDouble(candleType.GetProperty("High")?.GetValue(candle) ?? double.NaN, CultureInfo.InvariantCulture);
+                            if (barVpoPrice.HasValue && high > low)
+                            {
+                                barVpoLoc = Math.Max(0.0, Math.Min(1.0, (barVpoPrice.Value - low) / (high - low)));
+                            }
+
+                            if (!double.IsNaN(max.ask) && !double.IsNaN(max.bid))
+                            {
+                                barVpoSide = max.ask > max.bid ? "bull" : max.bid > max.ask ? "bear" : "neutral";
+                            }
                         }
-                        catch (Exception ex)
+                        else
                         {
-                            Log($"Probe error: {ex.Message}");
+                            Log("[VPO] vaps not found");
                         }
                     }
-<<<<<<< HEAD
-=======
->>>>>>> 1a09128 (update: revised SimplifiedDataExporter indicator code)
->>>>>>> 134adad (update: revised SimplifiedDataExporter indicator code)
                 }
 
                 // attach computed VPO values to pending payload via local variables below
@@ -378,6 +364,121 @@ namespace AtasCustomIndicators.V62
             }
 
             return ready;
+        }
+
+        private static double? SafeConvertToDouble(object? value)
+        {
+            if (value == null)
+            {
+                return null;
+            }
+
+            switch (value)
+            {
+                case double d:
+                    return d;
+                case float f:
+                    return f;
+                case decimal m:
+                    return (double)m;
+                case int i:
+                    return i;
+                case long l:
+                    return l;
+                case uint ui:
+                    return ui;
+                case ulong ul:
+                    return ul;
+                case short s:
+                    return s;
+                case ushort us:
+                    return us;
+                case byte b:
+                    return b;
+                case sbyte sb:
+                    return sb;
+                case string str when double.TryParse(str, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed):
+                    return parsed;
+                default:
+                    try
+                    {
+                        return Convert.ToDouble(value, CultureInfo.InvariantCulture);
+                    }
+                    catch
+                    {
+                        return null;
+                    }
+            }
+        }
+
+        private bool TryGetVolumeAtPrice(object candle,
+            out List<(double price, double vol, double bid, double ask)> vaps)
+        {
+            vaps = new();
+            try
+            {
+                var candidates = new[] { "Clusters", "Cluster", "Footprint", "VolumeAtPrice", "VolumeAtPrices", "PriceLevels" };
+                foreach (var name in candidates)
+                {
+                    var pi = candle.GetType().GetProperty(name);
+                    if (pi == null)
+                    {
+                        continue;
+                    }
+
+                    var container = pi.GetValue(candle);
+                    if (container is System.Collections.IEnumerable en)
+                    {
+                        foreach (var item in en)
+                        {
+                            if (item == null)
+                            {
+                                continue;
+                            }
+
+                            var price = ExtractNumeric(item, "Price", "Level", "PriceLevel") ?? double.NaN;
+                            var vol = ExtractNumeric(item, "Volume", "Vol", "TotalVolume") ?? double.NaN;
+                            var bid = ExtractNumeric(item, "Bid", "BidVolume", "SellVolume", "DownVolume") ?? double.NaN;
+                            var ask = ExtractNumeric(item, "Ask", "AskVolume", "BuyVolume", "UpVolume") ?? double.NaN;
+                            if (!double.IsNaN(price) && !double.IsNaN(vol) && vol > 0)
+                            {
+                                vaps.Add((price, vol, bid, ask));
+                            }
+                        }
+
+                        if (vaps.Count > 0)
+                        {
+                            return true;
+                        }
+                    }
+                    else
+                    {
+                        var item = container;
+                        if (item != null)
+                        {
+                            var price = ExtractNumeric(item, "Price", "Level", "PriceLevel") ?? double.NaN;
+                            var vol = ExtractNumeric(item, "Volume", "Vol", "TotalVolume") ?? double.NaN;
+                            var bid = ExtractNumeric(item, "Bid", "BidVolume", "SellVolume", "DownVolume") ?? double.NaN;
+                            var ask = ExtractNumeric(item, "Ask", "AskVolume", "BuyVolume", "UpVolume") ?? double.NaN;
+                            if (!double.IsNaN(price) && !double.IsNaN(vol) && vol > 0)
+                            {
+                                vaps.Add((price, vol, bid, ask));
+                            }
+                        }
+
+                        if (vaps.Count > 0)
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"TryGetVolumeAtPrice error: {ex.Message}");
+            }
+
+            return vaps.Count > 0;
         }
 
         private void WritePayload(ExportPayload payload)
@@ -462,11 +563,6 @@ namespace AtasCustomIndicators.V62
             Log($"[FPRINT] Assembly.Location = {asm.Location}");
             Log($"[FPRINT] Assembly.FullName = {asm.FullName}");
 
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-=======
->>>>>>> 134adad (update: revised SimplifiedDataExporter indicator code)
             // 三元身份打点，便于确认加载的是哪个程序集版本
             try
             {
@@ -476,10 +572,6 @@ namespace AtasCustomIndicators.V62
             }
             catch { /* no-op */ }
 
-<<<<<<< HEAD
-=======
->>>>>>> 1a09128 (update: revised SimplifiedDataExporter indicator code)
->>>>>>> 134adad (update: revised SimplifiedDataExporter indicator code)
             EnsureExportDirectory();
 
             _serializerSettings = new JsonSerializerSettings
@@ -877,121 +969,9 @@ namespace AtasCustomIndicators.V62
             }
         }
 
-        // 新增：尝试从 candle 中提取每价格位的成交量（VAPs）
-        private bool TryGetVolumeAtPrice(object candle,
-            out List<(double price, double vol, double bid, double ask)> vaps)
-        {
-<<<<<<< HEAD
-            vaps = new List<(double price, double vol, double bid, double ask)>(); // <-- 这里修改为集合初始化器写法
-=======
-<<<<<<< HEAD
-            vaps = new();
-=======
-            vaps = new List<(double price, double vol, double bid, double ask)>(); // <-- 这里修改为集合初始化器写法
->>>>>>> 1a09128 (update: revised SimplifiedDataExporter indicator code)
->>>>>>> 134adad (update: revised SimplifiedDataExporter indicator code)
-            try
-            {
-                var candidates = new[] { "Clusters", "Cluster", "Footprint", "VolumeAtPrice", "VolumeAtPrices", "PriceLevels" };
-                foreach (var name in candidates)
-                {
-                    var pi = candle.GetType().GetProperty(name);
-                    if (pi == null) continue;
-                    var container = pi.GetValue(candle);
-                    if (container is System.Collections.IEnumerable en)
-                    {
-                        foreach (var item in en)
-                        {
-                            if (item == null) continue;
-                            var price = ExtractNumeric(item, "Price", "Level", "PriceLevel") ?? double.NaN;
-                            var vol   = ExtractNumeric(item, "Volume", "Vol", "TotalVolume") ?? double.NaN;
-                            var bid   = ExtractNumeric(item, "Bid", "BidVolume", "SellVolume", "DownVolume") ?? double.NaN;
-                            var ask   = ExtractNumeric(item, "Ask", "AskVolume", "BuyVolume", "UpVolume") ?? double.NaN;
-                            if (!double.IsNaN(price) && !double.IsNaN(vol) && vol > 0)
-                                vaps.Add((price, vol, bid, ask));
-                        }
-                        if (vaps.Count > 0) return true;
-                    }
-                    else
-                    {
-                        // 单对象兜底（某些版本把 Footprint/Cluster 做成单对象而非集合）
-                        var item = container;
-                        if (item != null)
-                        {
-                            var price = ExtractNumeric(item, "Price", "Level", "PriceLevel") ?? double.NaN;
-                            var vol   = ExtractNumeric(item, "Volume", "Vol", "TotalVolume") ?? double.NaN;
-                            var bid   = ExtractNumeric(item, "Bid", "BidVolume", "SellVolume", "DownVolume") ?? double.NaN;
-                            var ask   = ExtractNumeric(item, "Ask", "AskVolume", "BuyVolume", "UpVolume") ?? double.NaN;
-                            if (!double.IsNaN(price) && !double.IsNaN(vol) && vol > 0)
-                                vaps.Add((price, vol, bid, ask));
-                        }
-                        if (vaps.Count > 0) return true;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Log($"TryGetVolumeAtPrice error: {ex.Message}");
-            }
-            return vaps.Count > 0;
-        }
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-=======
->>>>>>> 134adad (update: revised SimplifiedDataExporter indicator code)
-
-        // ---- 首根bar做一次深度探针，确认candle对象树 ----
-        private void TryDumpProperty(object o, string name)
-        {
-            var pi = o.GetType().GetProperty(name);
-            if (pi == null) { Log($"[DEEP] No property '{name}'"); return; }
-            object? v = null;
-            try { v = pi.GetValue(o); } catch { }
-            if (v == null) { Log($"[DEEP] {name}=<null>"); return; }
-            Log($"[DEEP] {name} -> {v.GetType().FullName}");
-            DeepDump(v, $"CANDLE.{name}.");
-        }
-        private void DeepDump(object obj, string prefix = "", int depth = 0, int maxDepth = 2, int maxItems = 30)
-        {
-            try
-            {
-                if (obj == null || depth > maxDepth) return;
-                var t = obj.GetType();
-                Log($"{prefix}[{depth}] TYPE = {t.FullName}");
-                var props = t.GetProperties(BindingFlags.Public | BindingFlags.Instance);
-                foreach (var p in props.Take(maxItems))
-                {
-                    object? v = null; try { v = p.GetValue(obj); } catch { }
-                    if (v == null) { Log($"{prefix}  {p.Name}=<null>"); continue; }
-                    var vt = v.GetType();
-                    if (vt.IsPrimitive || vt == typeof(string) || vt == typeof(decimal) || vt == typeof(DateTime))
-                        Log($"{prefix}  {p.Name}={v}");
-                    else if (v is System.Collections.IEnumerable en && !(v is string))
-                    {
-                        int i = 0;
-                        foreach (var item in en)
-                        {
-                            if (i++ >= 8) { Log($"{prefix}  {p.Name}[...]"); break; }
-                            Log($"{prefix}  {p.Name}[{i-1}] -> {item?.GetType().FullName}");
-                        }
-                    }
-                    else
-                    {
-                        Log($"{prefix}  {p.Name} -> {vt.FullName}");
-                    }
-                }
-            }
-            catch (Exception ex) { Log($"DeepDump error: {ex.Message}"); }
-        }
-
-<<<<<<< HEAD
-=======
->>>>>>> 1a09128 (update: revised SimplifiedDataExporter indicator code)
->>>>>>> 134adad (update: revised SimplifiedDataExporter indicator code)
     }
 
-    // 这些类型放回同一命名空间：AtasCustomIndicators.V62
+    // 这些类型放回同一命名空间：AtasCustomIndicators.V63
     public enum TimezoneOption
     {
         UTC,
@@ -1083,4 +1063,4 @@ namespace AtasCustomIndicators.V62
         public double Strength { get; }
         public string Side { get; }
     }
-} // 结束 namespace AtasCustomIndicators.V62
+} // 结束 namespace AtasCustomIndicators.V63
