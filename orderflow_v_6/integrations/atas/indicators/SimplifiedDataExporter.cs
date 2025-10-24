@@ -8,12 +8,12 @@ using System.Reflection;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
 
-namespace AtasCustomIndicators
+namespace AtasCustomIndicators.V62
 {
-    public class SimplifiedDataExporter : ATAS.Indicators.Indicator
+    // 类名改为带版本后缀，避免与旧类型冲突
+    public class SimplifiedDataExporterV62 : ATAS.Indicators.Indicator
     {
-        private const string SchemaVersion = "v6.1";
-
+        private const string SchemaVersion = "v6.2";
         private readonly object _syncRoot = new();
         private readonly Queue<(DateTimeOffset Timestamp, double Delta)> _rollingWindow = new();
         private readonly Dictionary<DateTimeOffset, ExportPayload> _pendingByMinute = new();
@@ -30,8 +30,9 @@ namespace AtasCustomIndicators
         private bool _firstOnCalculateLogged;
         private bool _logDirectoryEnsured;
         private long _flushSequence;
+        private bool _probed;  // 仅首根完成bar做一次深度探针
 
-        public SimplifiedDataExporter()
+        public SimplifiedDataExporterV62()
         {
             _logPath = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
@@ -41,7 +42,8 @@ namespace AtasCustomIndicators
 
             Log("Constructor begin");
 
-            Name = "SimplifiedDataExporter";
+            // 指标显示名也改为新标识
+            Name = "SimplifiedDataExporter_v62";
 
             _exportDir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
@@ -178,6 +180,23 @@ namespace AtasCustomIndicators
                 var absorption = new AbsorptionResult(false, double.NaN, string.Empty);
                 double? delta = null;
 
+                // Always compute delta & CVD (needed even in SafeMode)
+                try
+                {
+                    Log("Delta extraction begin");
+                    delta = ExtractDelta(candle);
+                    Log("Delta extraction end");
+
+                    Log("CVD update begin");
+                    cvd = UpdateCvd(minuteUtc, delta);
+                    Log("CVD update end");
+                }
+                catch (Exception ex)
+                {
+                    Log($"Delta/CVD computation error: {ex.Message}");
+                }
+
+                // Only compute profile values and absorption when not in SafeMode
                 if (!SafeMode)
                 {
                     Log("Profile extraction begin");
@@ -186,20 +205,54 @@ namespace AtasCustomIndicators
                     val = ExtractProfileValue(candle, "VAL", "ValueAreaLow");
                     Log("Profile extraction end");
 
-                    Log("Delta extraction begin");
-                    delta = ExtractDelta(candle);
-                    Log("Delta extraction end");
-
-                    Log("CVD update begin");
-                    cvd = UpdateCvd(minuteUtc, delta);
-                    Log("CVD update end");
-
                     Log("Absorption evaluation begin");
                     absorption = ExtractAbsorption(candle, delta, (double)candle.Volume);
                     Log("Absorption evaluation end");
                 }
 
-                var payload = new ExportPayload
+                // ---- 单bar体积峰值（只在 SafeMode=false 时计算）----
+                double? barVpoPrice = null, barVpoVol = null, barVpoLoc = null; string? barVpoSide = null;
+                if (!SafeMode)
+                {
+                    Log("[VPO] begin");
+                    if (TryGetVolumeAtPrice(candle, out var vaps) && vaps.Count > 0)
+                    {
+                        Log($"[VPO] vaps_found={vaps.Count}");
+                        var max = vaps.Aggregate((a, b) => a.vol >= b.vol ? a : b);
+                        barVpoPrice = max.price; barVpoVol = max.vol;
+                        var low = (double)candle.Low; var high = (double)candle.High;
+                        if (high > low) barVpoLoc = Math.Max(0.0, Math.Min(1.0, (barVpoPrice.GetValueOrDefault() - low) / (high - low)));
+                        if (!double.IsNaN(max.ask) && !double.IsNaN(max.bid))
+                            barVpoSide = max.ask > max.bid ? "bull" : max.bid > max.ask ? "bear" : "neutral";
+                        Log($"[VPO] max price={barVpoPrice} vol={barVpoVol} loc={barVpoLoc} side={barVpoSide}");
+                    }
+                    else
+                    {
+                        Log("[VPO] vaps not found");
+                    }
+
+                    // 首根完成 bar 做一次深度探针（只执行一次）
+                    if (!_probed)
+                    {
+                        try
+                        {
+                            _probed = true;
+                            TryDumpProperty(candle, "Footprint");
+                            TryDumpProperty(candle, "Clusters");
+                            TryDumpProperty(candle, "Cluster");
+                            TryDumpProperty(candle, "VolumeAtPrice");
+                            TryDumpProperty(candle, "VolumeAtPrices");
+                            TryDumpProperty(candle, "PriceLevels");
+                        }
+                        catch (Exception ex)
+                        {
+                            Log($"Probe error: {ex.Message}");
+                        }
+                    }
+                }
+
+                // attach computed VPO values to pending payload via local variables below
+                var payloadForVpo = new ExportPayload
                 {
                     TimestampUtc = minuteUtc,
                     TimestampString = outputTimestamp,
@@ -214,10 +267,15 @@ namespace AtasCustomIndicators
                     Cvd = cvd,
                     AbsorptionDetected = absorption.Detected,
                     AbsorptionStrength = absorption.Strength,
-                    AbsorptionSide = absorption.Side
+                    AbsorptionSide = absorption.Side,
+                    BarVpoPrice = barVpoPrice,
+                    BarVpoVol = barVpoVol,
+                    BarVpoLoc = barVpoLoc,
+                    BarVpoSide = barVpoSide
                 };
 
-                _pendingByMinute[minuteUtc] = payload;
+                _pendingByMinute[minuteUtc] = payloadForVpo;
+
                 var completed = CollectCompletedMinutes(minuteUtc);
                 foreach (var ready in completed)
                 {
@@ -250,7 +308,7 @@ namespace AtasCustomIndicators
         private List<ExportPayload> CollectCompletedMinutes(DateTimeOffset currentMinuteUtc)
         {
             var minutesToFlush = _pendingByMinute.Keys
-                .Where(minute => Backfill ? minute <= currentMinuteUtc : minute < currentMinuteUtc)
+                .Where(minute => minute < currentMinuteUtc) // right-closed：只刷已封闭的上一分钟
                 .OrderBy(minute => minute)
                 .ToList();
 
@@ -273,31 +331,51 @@ namespace AtasCustomIndicators
         {
             try
             {
-                var latestPath = Path.Combine(_exportDir, "latest.json");
-                var dayFile = Path.Combine(_exportDir, $"market_data_{payload.TimestampUtc:yyyyMMdd}.jsonl");
+                var dayDir = Path.Combine(_exportDir, $"date={payload.TimestampUtc:yyyy-MM-dd}");
+                Directory.CreateDirectory(dayDir);
+
+                var latestPath = Path.Combine(_exportDir, "latest.json"); // keep at root for monitoring
+                var dayFile = Path.Combine(dayDir, $"bar_{payload.TimestampUtc:yyyyMMdd}.jsonl");
+
+                static object? N(double? x)
+                    => (x.HasValue && (double.IsNaN(x.Value) || double.IsInfinity(x.Value))) ? null : x;
+                static object? Nf(double x)
+                    => (double.IsNaN(x) || double.IsInfinity(x)) ? null : x;
+
+                var timestampUtcIso = payload.TimestampUtc.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture);
+                var tzLabel = OutputTimezone.ToString(); // "UTC" or "Local"
 
                 var windowId = payload.TimestampUtc.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture);
                 var document = new Dictionary<string, object?>
                 {
                     ["timestamp"] = payload.TimestampString,
+                    ["timestamp_utc"] = timestampUtcIso,
+                    ["tz"] = tzLabel,
                     ["open"] = payload.Open,
                     ["high"] = payload.High,
                     ["low"] = payload.Low,
                     ["close"] = payload.Close,
                     ["volume"] = payload.Volume,
-                    ["poc"] = payload.Poc,
-                    ["vah"] = payload.Vah,
-                    ["val"] = payload.Val,
-                    ["cvd"] = payload.Cvd,
+                    ["poc"] = N(payload.Poc),
+                    ["vah"] = N(payload.Vah),
+                    ["val"] = N(payload.Val),
+                    ["cvd"] = N(payload.Cvd),
                     ["absorption_detected"] = payload.AbsorptionDetected,
-                    ["absorption_strength"] = payload.AbsorptionStrength,
+                    ["absorption_strength"] = Nf(payload.AbsorptionStrength),
                     ["absorption_side"] = payload.AbsorptionSide ?? string.Empty,
+                    ["bar_vpo_price"] = N(payload.BarVpoPrice),
+                    ["bar_vpo_vol"]   = N(payload.BarVpoVol),
+                    ["bar_vpo_loc"]   = N(payload.BarVpoLoc),
+                    ["bar_vpo_side"]  = payload.BarVpoSide ?? string.Empty,
                     ["window_id"] = windowId,
                     ["flush_seq"] = payload.FlushSequence,
                     ["window_convention"] = "[minute_open, minute_close] right-closed",
+                    ["fingerprint"] = "V6-PARTITIONED",
+                    ["filename_pattern"] = "bar_YYYYMMDD.jsonl",
                     ["exporter_version"] = ExporterVersion,
                     ["schema_version"] = SchemaVersion,
-                    ["backfill"] = Backfill
+                    ["backfill"] = Backfill,
+                    ["cvd_mode"] = _sessionModeDefinition.OriginalValue
                 };
 
                 if (_serializerSettings == null)
@@ -320,29 +398,40 @@ namespace AtasCustomIndicators
             }
         }
 
+
         private void LazyInit()
         {
-            if (_initialized)
-            {
-                return;
-            }
+            if (_initialized) return;
 
             Log("LazyInit begin");
+
+            var asm = Assembly.GetExecutingAssembly();
+            Log($"[FPRINT] Assembly.Location = {asm.Location}");
+            Log($"[FPRINT] Assembly.FullName = {asm.FullName}");
+
+            // 三元身份打点，便于确认加载的是哪个程序集版本
+            try
+            {
+                Log($"[ID] Name={asm.GetName().Name}");
+                Log($"[ID] Version={asm.GetName().Version}");
+                Log($"[ID] Location={asm.Location}");
+            }
+            catch { /* no-op */ }
 
             EnsureExportDirectory();
 
             _serializerSettings = new JsonSerializerSettings
             {
                 ContractResolver = new CamelCasePropertyNamesContractResolver(),
-                FloatFormatHandling = FloatFormatHandling.Symbol,
+                // FloatFormatHandling = FloatFormatHandling.Symbol,
                 DateFormatString = "o",
                 Formatting = _jsonIndent ? Formatting.Indented : Formatting.None
             };
 
             _initialized = true;
-
             Log("LazyInit end");
         }
+
 
         private DateTimeOffset ResolveUtcTimestamp(DateTime candleTime)
         {
@@ -452,19 +541,18 @@ namespace AtasCustomIndicators
                     }
                     catch
                     {
-                        break;
+                        result = double.NaN;
+                        return false;
                     }
-                    break;
+                default:
+                    if (double.TryParse(Convert.ToString(input, CultureInfo.InvariantCulture), NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed))
+                    {
+                        result = parsed;
+                        return true;
+                    }
+                    result = double.NaN;
+                    return false;
             }
-
-            if (double.TryParse(Convert.ToString(input, CultureInfo.InvariantCulture), NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed))
-            {
-                result = parsed;
-                return true;
-            }
-
-            result = double.NaN;
-            return false;
         }
 
         private double? ExtractDelta(object candle)
@@ -687,6 +775,15 @@ namespace AtasCustomIndicators
             try
             {
                 Directory.CreateDirectory(_exportDir);
+
+                try
+                {
+                    var dirLower = _exportDir.Replace('\\', '/').ToLowerInvariant();
+                    if (dirLower.Contains("/date=") || dirLower.EndsWith("date="))
+                        Log($"[WARN] ExportDir appears to contain a 'date=' partition: '{_exportDir}'. " +
+                            "WritePayload will append its own 'date=YYYY-MM-DD' child — ensure ExportDir points to the partition ROOT, e.g. ...\\resolution=1m");
+                }
+                catch { /* no-op */ }
             }
             catch (Exception ex)
             {
@@ -717,8 +814,105 @@ namespace AtasCustomIndicators
                 // suppress logging failures
             }
         }
+
+        // 新增：尝试从 candle 中提取每价格位的成交量（VAPs）
+        private bool TryGetVolumeAtPrice(object candle,
+            out List<(double price, double vol, double bid, double ask)> vaps)
+        {
+            vaps = new List<(double price, double vol, double bid, double ask)>(); // <-- 这里修改为集合初始化器写法
+            try
+            {
+                var candidates = new[] { "Clusters", "Cluster", "Footprint", "VolumeAtPrice", "VolumeAtPrices", "PriceLevels" };
+                foreach (var name in candidates)
+                {
+                    var pi = candle.GetType().GetProperty(name);
+                    if (pi == null) continue;
+                    var container = pi.GetValue(candle);
+                    if (container is System.Collections.IEnumerable en)
+                    {
+                        foreach (var item in en)
+                        {
+                            if (item == null) continue;
+                            var price = ExtractNumeric(item, "Price", "Level", "PriceLevel") ?? double.NaN;
+                            var vol   = ExtractNumeric(item, "Volume", "Vol", "TotalVolume") ?? double.NaN;
+                            var bid   = ExtractNumeric(item, "Bid", "BidVolume", "SellVolume", "DownVolume") ?? double.NaN;
+                            var ask   = ExtractNumeric(item, "Ask", "AskVolume", "BuyVolume", "UpVolume") ?? double.NaN;
+                            if (!double.IsNaN(price) && !double.IsNaN(vol) && vol > 0)
+                                vaps.Add((price, vol, bid, ask));
+                        }
+                        if (vaps.Count > 0) return true;
+                    }
+                    else
+                    {
+                        // 单对象兜底（某些版本把 Footprint/Cluster 做成单对象而非集合）
+                        var item = container;
+                        if (item != null)
+                        {
+                            var price = ExtractNumeric(item, "Price", "Level", "PriceLevel") ?? double.NaN;
+                            var vol   = ExtractNumeric(item, "Volume", "Vol", "TotalVolume") ?? double.NaN;
+                            var bid   = ExtractNumeric(item, "Bid", "BidVolume", "SellVolume", "DownVolume") ?? double.NaN;
+                            var ask   = ExtractNumeric(item, "Ask", "AskVolume", "BuyVolume", "UpVolume") ?? double.NaN;
+                            if (!double.IsNaN(price) && !double.IsNaN(vol) && vol > 0)
+                                vaps.Add((price, vol, bid, ask));
+                        }
+                        if (vaps.Count > 0) return true;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"TryGetVolumeAtPrice error: {ex.Message}");
+            }
+            return vaps.Count > 0;
+        }
+
+        // ---- 首根bar做一次深度探针，确认candle对象树 ----
+        private void TryDumpProperty(object o, string name)
+        {
+            var pi = o.GetType().GetProperty(name);
+            if (pi == null) { Log($"[DEEP] No property '{name}'"); return; }
+            object? v = null;
+            try { v = pi.GetValue(o); } catch { }
+            if (v == null) { Log($"[DEEP] {name}=<null>"); return; }
+            Log($"[DEEP] {name} -> {v.GetType().FullName}");
+            DeepDump(v, $"CANDLE.{name}.");
+        }
+        private void DeepDump(object obj, string prefix = "", int depth = 0, int maxDepth = 2, int maxItems = 30)
+        {
+            try
+            {
+                if (obj == null || depth > maxDepth) return;
+                var t = obj.GetType();
+                Log($"{prefix}[{depth}] TYPE = {t.FullName}");
+                var props = t.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+                foreach (var p in props.Take(maxItems))
+                {
+                    object? v = null; try { v = p.GetValue(obj); } catch { }
+                    if (v == null) { Log($"{prefix}  {p.Name}=<null>"); continue; }
+                    var vt = v.GetType();
+                    if (vt.IsPrimitive || vt == typeof(string) || vt == typeof(decimal) || vt == typeof(DateTime))
+                        Log($"{prefix}  {p.Name}={v}");
+                    else if (v is System.Collections.IEnumerable en && !(v is string))
+                    {
+                        int i = 0;
+                        foreach (var item in en)
+                        {
+                            if (i++ >= 8) { Log($"{prefix}  {p.Name}[...]"); break; }
+                            Log($"{prefix}  {p.Name}[{i-1}] -> {item?.GetType().FullName}");
+                        }
+                    }
+                    else
+                    {
+                        Log($"{prefix}  {p.Name} -> {vt.FullName}");
+                    }
+                }
+            }
+            catch (Exception ex) { Log($"DeepDump error: {ex.Message}"); }
+        }
+
     }
 
+    // 这些类型放回同一命名空间：AtasCustomIndicators.V62
     public enum TimezoneOption
     {
         UTC,
@@ -751,7 +945,7 @@ namespace AtasCustomIndicators
                 return new SessionModeDefinition(SessionModeKind.Rolling, TimeSpan.FromMinutes(60), "rolling:60");
             }
 
-            var text = raw.Trim();
+            var text = raw!.Trim();
             if (text.StartsWith("rolling", StringComparison.OrdinalIgnoreCase))
             {
                 var parts = text.Split(':');
@@ -789,6 +983,12 @@ namespace AtasCustomIndicators
         public double AbsorptionStrength { get; set; }
         public string? AbsorptionSide { get; set; }
         public long FlushSequence { get; set; }
+
+        // 新增字段：Bar VPO 信息
+        public double? BarVpoPrice { get; set; }
+        public double? BarVpoVol { get; set; }
+        public double? BarVpoLoc { get; set; }
+        public string? BarVpoSide { get; set; }
     }
 
     internal readonly struct AbsorptionResult
@@ -804,4 +1004,4 @@ namespace AtasCustomIndicators
         public double Strength { get; }
         public string Side { get; }
     }
-}
+} // 结束 namespace AtasCustomIndicators.V62

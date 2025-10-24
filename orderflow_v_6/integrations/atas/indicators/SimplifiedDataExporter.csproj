@@ -2,14 +2,27 @@
   <PropertyGroup>
     <TargetFramework>net472</TargetFramework>
     <OutputType>Library</OutputType>
-    <AssemblyName>SimplifiedDataExporter</AssemblyName>
-    <RootNamespace>AtasCustomIndicators</RootNamespace>
+    <!-- 改装配名以携带新身份 -->
+    <AssemblyName>SimplifiedDataExporter.V62</AssemblyName>
+    <Version>6.2.0.0</Version>
+    <AssemblyVersion>6.2.0.0</AssemblyVersion>
+    <FileVersion>6.2.0.0</FileVersion>
+    <RootNamespace>AtasCustomIndicators.V62</RootNamespace>
     <Configurations>Debug;Release</Configurations>
     <Platforms>AnyCPU</Platforms>
-    <AssemblyVersion>6.1.0.0</AssemblyVersion>
-    <FileVersion>6.1.0.0</FileVersion>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
+
+    <!-- 不使用确定性构建，便于每次版本产出新签名/身份 -->
+    <Deterministic>false</Deterministic>
+
+    <!-- 暂时关闭强签名，方便本地测试 -->
+    <SignAssembly>false</SignAssembly>
+    <!-- <AssemblyOriginatorKeyFile>signing.snk</AssemblyOriginatorKeyFile> -->
+
+    <!-- 避免在输出目录中追加 TFM/RID（保持输出路径可控） -->
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
   </PropertyGroup>
 
   <!-- 若开发者已在 VS 中“手动添加引用”，仓库内的自动探测不会覆盖手动设置；推荐以手动为准。 -->
@@ -36,14 +49,26 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Include="OrderFlow-V6.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="ATAS.Indicators">
+      <HintPath>..\..\..\..\..\..\..\Program Files (x86)\ATAS Platform\ATAS.Indicators.dll</HintPath>
+    </Reference>
+    <Reference Include="ATAS.Indicators.Technical">
+      <HintPath>..\..\..\..\..\..\..\Program Files (x86)\ATAS Platform\ATAS.Indicators.Technical.dll</HintPath>
+    </Reference>
+    <Reference Include="ATAS.Types">
+      <HintPath>..\..\..\..\..\..\..\Program Files (x86)\ATAS Platform\ATAS.Types.dll</HintPath>
+    </Reference>
     <Reference Include="Microsoft.CSharp" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
 
   <Target Name="ResolveAtasReferences" BeforeTargets="ResolveReferences">
     <ItemGroup>
-      <_ManualAtasReference Include="@(Reference)"
-                            Condition="'%(Reference.HintPath)' != '' and $([System.IO.Path]::IsPathRooted('%(Reference.HintPath)')) and $([System.String]::Copy('%(Reference.Identity)').ToUpperInvariant().StartsWith('ATAS.'))" />
+      <_ManualAtasReference Include="@(Reference)" Condition="'%(Reference.HintPath)' != '' and $([System.IO.Path]::IsPathRooted('%(Reference.HintPath)')) and $([System.String]::Copy('%(Reference.Identity)').ToUpperInvariant().StartsWith('ATAS.'))" />
     </ItemGroup>
 
     <PropertyGroup>
@@ -93,5 +118,10 @@
   <Target Name="CheckAtasSdk" BeforeTargets="Build">
     <Warning Condition=" '$(AtasSdkDir)' == '' " Text="未解析到 ATAS SDK 目录。可在 VS 中手动添加引用，或设置 ATAS_SDK_DIR / 安装到常见路径。" />
     <Warning Condition=" '$(AtasSdkDir)' != '' and !Exists('$(AtasSdkDir)\Atas.Indicators.dll') " Text="未发现 $(AtasSdkDir)\Atas.Indicators.dll，请检查路径或 ATAS_SDK_DIR。" />
+  </Target>
+
+  <!-- 额外的输出文件名（双保险） -->
+  <Target Name="RenameOutput" AfterTargets="Build">
+    <Copy SourceFiles="$(TargetPath)" DestinationFiles="$(TargetDir)SimplifiedDataExporter_v62_$(FileVersion).dll" OverwriteReadOnlyFiles="true" />
   </Target>
 </Project>
