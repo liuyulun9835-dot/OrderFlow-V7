@@ -42,8 +42,17 @@ namespace AtasCustomIndicators.V62
 
             Log("Constructor begin");
 
+<<<<<<< HEAD
             // 指标显示名也改为新标识
             Name = "SimplifiedDataExporter_v62";
+=======
+<<<<<<< HEAD
+            Name = "SimplifiedDataExporter_v6p";
+=======
+            // 指标显示名也改为新标识
+            Name = "SimplifiedDataExporter_v62";
+>>>>>>> 1a09128 (update: revised SimplifiedDataExporter indicator code)
+>>>>>>> 134adad (update: revised SimplifiedDataExporter indicator code)
 
             _exportDir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
@@ -210,6 +219,45 @@ namespace AtasCustomIndicators.V62
                     Log("Absorption evaluation end");
                 }
 
+<<<<<<< HEAD
+                // ---- 单bar体积峰值（只在 SafeMode=false 时计算）----
+                double? barVpoPrice = null, barVpoVol = null, barVpoLoc = null; string? barVpoSide = null;
+                if (!SafeMode)
+=======
+<<<<<<< HEAD
+                // VPO 只在 SafeMode=false 时计算，避免初始化期卡顿
+                double? barVpoPrice = null, barVpoVol = null, barVpoLoc = null;
+                string? barVpoSide = null;
+                if (!SafeMode && TryGetVolumeAtPrice(candle, out var vaps) && vaps.Count > 0)
+>>>>>>> 134adad (update: revised SimplifiedDataExporter indicator code)
+                {
+                    Log("[VPO] begin");
+                    if (TryGetVolumeAtPrice(candle, out var vaps) && vaps.Count > 0)
+                    {
+                        Log($"[VPO] vaps_found={vaps.Count}");
+                        var max = vaps.Aggregate((a, b) => a.vol >= b.vol ? a : b);
+                        barVpoPrice = max.price; barVpoVol = max.vol;
+                        var low = (double)candle.Low; var high = (double)candle.High;
+                        if (high > low) barVpoLoc = Math.Max(0.0, Math.Min(1.0, (barVpoPrice.GetValueOrDefault() - low) / (high - low)));
+                        if (!double.IsNaN(max.ask) && !double.IsNaN(max.bid))
+                            barVpoSide = max.ask > max.bid ? "bull" : max.bid > max.ask ? "bear" : "neutral";
+                        Log($"[VPO] max price={barVpoPrice} vol={barVpoVol} loc={barVpoLoc} side={barVpoSide}");
+                    }
+                    else
+                    {
+                        Log("[VPO] vaps not found");
+                    }
+
+<<<<<<< HEAD
+=======
+                    var low = (double)candle.Low;
+                    var high = (double)candle.High;
+                    if (high > low)
+                        barVpoLoc = Math.Max(0.0, Math.Min(1.0, (barVpoPrice - low) / (high - low))); // clamp
+
+                    if (!double.IsNaN(max.ask) && !double.IsNaN(max.bid))
+                        barVpoSide = max.ask > max.bid ? "bull" : max.bid > max.ask ? "bear" : "neutral";
+=======
                 // ---- 单bar体积峰值（只在 SafeMode=false 时计算）----
                 double? barVpoPrice = null, barVpoVol = null, barVpoLoc = null; string? barVpoSide = null;
                 if (!SafeMode)
@@ -231,6 +279,7 @@ namespace AtasCustomIndicators.V62
                         Log("[VPO] vaps not found");
                     }
 
+>>>>>>> 134adad (update: revised SimplifiedDataExporter indicator code)
                     // 首根完成 bar 做一次深度探针（只执行一次）
                     if (!_probed)
                     {
@@ -249,6 +298,10 @@ namespace AtasCustomIndicators.V62
                             Log($"Probe error: {ex.Message}");
                         }
                     }
+<<<<<<< HEAD
+=======
+>>>>>>> 1a09128 (update: revised SimplifiedDataExporter indicator code)
+>>>>>>> 134adad (update: revised SimplifiedDataExporter indicator code)
                 }
 
                 // attach computed VPO values to pending payload via local variables below
@@ -409,6 +462,11 @@ namespace AtasCustomIndicators.V62
             Log($"[FPRINT] Assembly.Location = {asm.Location}");
             Log($"[FPRINT] Assembly.FullName = {asm.FullName}");
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+>>>>>>> 134adad (update: revised SimplifiedDataExporter indicator code)
             // 三元身份打点，便于确认加载的是哪个程序集版本
             try
             {
@@ -418,6 +476,10 @@ namespace AtasCustomIndicators.V62
             }
             catch { /* no-op */ }
 
+<<<<<<< HEAD
+=======
+>>>>>>> 1a09128 (update: revised SimplifiedDataExporter indicator code)
+>>>>>>> 134adad (update: revised SimplifiedDataExporter indicator code)
             EnsureExportDirectory();
 
             _serializerSettings = new JsonSerializerSettings
@@ -819,7 +881,15 @@ namespace AtasCustomIndicators.V62
         private bool TryGetVolumeAtPrice(object candle,
             out List<(double price, double vol, double bid, double ask)> vaps)
         {
+<<<<<<< HEAD
             vaps = new List<(double price, double vol, double bid, double ask)>(); // <-- 这里修改为集合初始化器写法
+=======
+<<<<<<< HEAD
+            vaps = new();
+=======
+            vaps = new List<(double price, double vol, double bid, double ask)>(); // <-- 这里修改为集合初始化器写法
+>>>>>>> 1a09128 (update: revised SimplifiedDataExporter indicator code)
+>>>>>>> 134adad (update: revised SimplifiedDataExporter indicator code)
             try
             {
                 var candidates = new[] { "Clusters", "Cluster", "Footprint", "VolumeAtPrice", "VolumeAtPrices", "PriceLevels" };
@@ -865,6 +935,11 @@ namespace AtasCustomIndicators.V62
             }
             return vaps.Count > 0;
         }
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+>>>>>>> 134adad (update: revised SimplifiedDataExporter indicator code)
 
         // ---- 首根bar做一次深度探针，确认candle对象树 ----
         private void TryDumpProperty(object o, string name)
@@ -910,6 +985,10 @@ namespace AtasCustomIndicators.V62
             catch (Exception ex) { Log($"DeepDump error: {ex.Message}"); }
         }
 
+<<<<<<< HEAD
+=======
+>>>>>>> 1a09128 (update: revised SimplifiedDataExporter indicator code)
+>>>>>>> 134adad (update: revised SimplifiedDataExporter indicator code)
     }
 
     // 这些类型放回同一命名空间：AtasCustomIndicators.V62
