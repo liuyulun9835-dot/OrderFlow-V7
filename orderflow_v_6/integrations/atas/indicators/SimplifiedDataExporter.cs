@@ -4,7 +4,6 @@ using System.ComponentModel;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
 
@@ -209,84 +208,48 @@ namespace AtasCustomIndicators.V63
                     Log("Absorption evaluation end");
                 }
 
-                // ---- 单bar体积峰值（先尝试SDK反射，失败再回退容器猜名）----
-                double? barVpoPrice = null, barVpoVol = null, barVpoLoc = null;
-                string? barVpoSide = null;
-
+                // ---- 单bar体积峰值 (SDK Direct Access v6.3) ----
+                double? barVpoPrice = null, barVpoVol = null, barVpoLoc = null; string? barVpoSide = null;
                 if (!SafeMode)
                 {
-                    Log("[VPO] begin");
-                    var candleType = candle.GetType();
-
-                    // 1) SDK 反射：candle.MaxVolumePriceInfo
+                    Log("[VPO] begin SDK direct access");
                     try
                     {
-                        var pi = candleType.GetProperty("MaxVolumePriceInfo", BindingFlags.Public | BindingFlags.Instance);
-                        var info = pi?.GetValue(candle);
-                        if (info != null)
+                        // 使用 ATAS SDK 官方属性直接访问 (IndicatorCandle.MaxVolumePriceInfo)
+                        // (不再使用 GetProperty 反射)
+                        var maxVolInfo = candle.MaxVolumePriceInfo;
+
+                        if (maxVolInfo != null)
                         {
-                            var pPrice = info.GetType().GetProperty("Price");
-                            var pVol = info.GetType().GetProperty("Volume");
-                            var pBid = info.GetType().GetProperty("Bid");
-                            var pAsk = info.GetType().GetProperty("Ask");
+                            // 成功获取到 SDK 提供的最大量价阶信息
+                            barVpoPrice = Convert.ToDouble(maxVolInfo.Price, CultureInfo.InvariantCulture);
+                            barVpoVol = Convert.ToDouble(maxVolInfo.Volume, CultureInfo.InvariantCulture);
 
-                            barVpoPrice = SafeConvertToDouble(pPrice?.GetValue(info));
-                            barVpoVol = SafeConvertToDouble(pVol?.GetValue(info));
-                            var bid = SafeConvertToDouble(pBid?.GetValue(info));
-                            var ask = SafeConvertToDouble(pAsk?.GetValue(info));
+                            // (不再使用 GetProperty 反射)
+                            var low = Convert.ToDouble(candle.Low, CultureInfo.InvariantCulture);
+                            var high = Convert.ToDouble(candle.High, CultureInfo.InvariantCulture);
 
-                            var low = Convert.ToDouble(candleType.GetProperty("Low")?.GetValue(candle) ?? double.NaN, CultureInfo.InvariantCulture);
-                            var high = Convert.ToDouble(candleType.GetProperty("High")?.GetValue(candle) ?? double.NaN, CultureInfo.InvariantCulture);
-                            if (barVpoPrice.HasValue && high > low)
-                            {
-                                barVpoLoc = Math.Max(0.0, Math.Min(1.0, (barVpoPrice.Value - low) / (high - low)));
-                            }
+                            if (high > low)
+                                barVpoLoc = Math.Max(0.0, Math.Min(1.0, (barVpoPrice.GetValueOrDefault() - low) / (high - low)));
 
-                            if (ask.HasValue && bid.HasValue && !double.IsNaN(ask.Value) && !double.IsNaN(bid.Value))
-                            {
-                                var askValue = ask.Value;
-                                var bidValue = bid.Value;
-                                barVpoSide = askValue > bidValue ? "bull" : bidValue > askValue ? "bear" : "neutral";
-                            }
+                            var bid = Convert.ToDouble(maxVolInfo.Bid, CultureInfo.InvariantCulture);
+                            var ask = Convert.ToDouble(maxVolInfo.Ask, CultureInfo.InvariantCulture);
 
-                            Log($"[VPO] SDK Hit: price={barVpoPrice} vol={barVpoVol} side={barVpoSide}");
+                            if (!double.IsNaN(ask) && !double.IsNaN(bid))
+                                barVpoSide = ask > bid ? "bull" : bid > ask ? "bear" : "neutral";
+
+                            Log($"[VPO] SDK Hit: MaxVolInfo found. Price={barVpoPrice} Vol={barVpoVol} Side={barVpoSide}");
                         }
                         else
                         {
-                            Log("[VPO] SDK Miss: MaxVolumePriceInfo is null");
+                            // 如果 SDK 返回 null (可能在某些 tick 精度或无成交的 bar 上)
+                            Log("[VPO] SDK Miss: candle.MaxVolumePriceInfo was null.");
                         }
                     }
                     catch (Exception ex)
                     {
+                        // 捕获 API 调用或类型转换的异常
                         Log($"[VPO] SDK access error: {ex.Message}");
-                    }
-
-                    // 2) 回退：常见容器（Clusters/Footprint/VolumeAtPrices/PriceLevels）
-                    if (!barVpoPrice.HasValue)
-                    {
-                        if (TryGetVolumeAtPrice(candle, out var vaps) && vaps.Count > 0)
-                        {
-                            Log($"[VPO] Fallback vaps_found={vaps.Count}");
-                            var max = vaps.Aggregate((a, b) => a.vol >= b.vol ? a : b);
-                            barVpoPrice = max.price;
-                            barVpoVol = max.vol;
-
-                            var low = Convert.ToDouble(candleType.GetProperty("Low")?.GetValue(candle) ?? double.NaN, CultureInfo.InvariantCulture);
-                            var high = Convert.ToDouble(candleType.GetProperty("High")?.GetValue(candle) ?? double.NaN, CultureInfo.InvariantCulture);
-                            if (barVpoPrice.HasValue && high > low)
-                            {
-                                barVpoLoc = Math.Max(0.0, Math.Min(1.0, (barVpoPrice.Value - low) / (high - low)));
-                            }
-
-                            if (!double.IsNaN(max.ask) && !double.IsNaN(max.bid))
-                            {
-                                barVpoSide = max.ask > max.bid ? "bull" : max.bid > max.ask ? "bear" : "neutral";
-                            }
-                        }
-                        else
-                        {
-                            Log("[VPO] vaps not found");
-                        }
                     }
                 }
 
@@ -364,121 +327,6 @@ namespace AtasCustomIndicators.V63
             }
 
             return ready;
-        }
-
-        private static double? SafeConvertToDouble(object? value)
-        {
-            if (value == null)
-            {
-                return null;
-            }
-
-            switch (value)
-            {
-                case double d:
-                    return d;
-                case float f:
-                    return f;
-                case decimal m:
-                    return (double)m;
-                case int i:
-                    return i;
-                case long l:
-                    return l;
-                case uint ui:
-                    return ui;
-                case ulong ul:
-                    return ul;
-                case short s:
-                    return s;
-                case ushort us:
-                    return us;
-                case byte b:
-                    return b;
-                case sbyte sb:
-                    return sb;
-                case string str when double.TryParse(str, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed):
-                    return parsed;
-                default:
-                    try
-                    {
-                        return Convert.ToDouble(value, CultureInfo.InvariantCulture);
-                    }
-                    catch
-                    {
-                        return null;
-                    }
-            }
-        }
-
-        private bool TryGetVolumeAtPrice(object candle,
-            out List<(double price, double vol, double bid, double ask)> vaps)
-        {
-            vaps = new();
-            try
-            {
-                var candidates = new[] { "Clusters", "Cluster", "Footprint", "VolumeAtPrice", "VolumeAtPrices", "PriceLevels" };
-                foreach (var name in candidates)
-                {
-                    var pi = candle.GetType().GetProperty(name);
-                    if (pi == null)
-                    {
-                        continue;
-                    }
-
-                    var container = pi.GetValue(candle);
-                    if (container is System.Collections.IEnumerable en)
-                    {
-                        foreach (var item in en)
-                        {
-                            if (item == null)
-                            {
-                                continue;
-                            }
-
-                            var price = ExtractNumeric(item, "Price", "Level", "PriceLevel") ?? double.NaN;
-                            var vol = ExtractNumeric(item, "Volume", "Vol", "TotalVolume") ?? double.NaN;
-                            var bid = ExtractNumeric(item, "Bid", "BidVolume", "SellVolume", "DownVolume") ?? double.NaN;
-                            var ask = ExtractNumeric(item, "Ask", "AskVolume", "BuyVolume", "UpVolume") ?? double.NaN;
-                            if (!double.IsNaN(price) && !double.IsNaN(vol) && vol > 0)
-                            {
-                                vaps.Add((price, vol, bid, ask));
-                            }
-                        }
-
-                        if (vaps.Count > 0)
-                        {
-                            return true;
-                        }
-                    }
-                    else
-                    {
-                        var item = container;
-                        if (item != null)
-                        {
-                            var price = ExtractNumeric(item, "Price", "Level", "PriceLevel") ?? double.NaN;
-                            var vol = ExtractNumeric(item, "Volume", "Vol", "TotalVolume") ?? double.NaN;
-                            var bid = ExtractNumeric(item, "Bid", "BidVolume", "SellVolume", "DownVolume") ?? double.NaN;
-                            var ask = ExtractNumeric(item, "Ask", "AskVolume", "BuyVolume", "UpVolume") ?? double.NaN;
-                            if (!double.IsNaN(price) && !double.IsNaN(vol) && vol > 0)
-                            {
-                                vaps.Add((price, vol, bid, ask));
-                            }
-                        }
-
-                        if (vaps.Count > 0)
-                        {
-                            return true;
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Log($"TryGetVolumeAtPrice error: {ex.Message}");
-            }
-
-            return vaps.Count > 0;
         }
 
         private void WritePayload(ExportPayload payload)
