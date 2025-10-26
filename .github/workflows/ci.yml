@@ -31,6 +31,55 @@ jobs:
         run: make lint
       - name: Run tests
         run: make test
+      - name: Validate governance schemas
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json
+
+          def require_keys(payload, required, name):
+              missing = [key for key in required if key not in payload]
+              if missing:
+                  raise SystemExit(f"{name} missing keys: {missing}")
+
+          model_schema = json.loads(Path("governance/SCHEMA_model.json").read_text())
+          decision_schema = json.loads(Path("governance/SCHEMA_decision.json").read_text())
+
+          require_keys(model_schema, ["clusterer_config", "clarity", "abstain", "prototype_drift"], "SCHEMA_model")
+          require_keys(decision_schema, ["clarity", "abstain", "reason"], "SCHEMA_decision")
+          print("governance schemas validated")
+          PY
+      - name: Run minimal V7 pipeline
+        run: |
+          make data.qc
+          make cluster.fit
+          make tvtp.fit
+          make validate
+      - name: Apply release gates
+        run: make release
+      - name: Record artifact signatures
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          import json
+
+          artifacts = {}
+          for path_str in [
+              "output/tvtp/transition_prob.parquet",
+              "output/tvtp/transition_prob.csv",
+              "validation/metrics_summary.json",
+              "model/clusterer_dynamic/cluster_artifacts.json",
+          ]:
+              path = Path(path_str)
+              if path.exists():
+                  artifacts[path_str] = hashlib.sha256(path.read_bytes()).hexdigest()
+
+          output = Path("output/signatures.json")
+          output.parent.mkdir(parents=True, exist_ok=True)
+          output.write_text(json.dumps(artifacts, indent=2, sort_keys=True))
+          print(json.dumps(artifacts, indent=2, sort_keys=True))
+          PY
       - name: Cost gate
         run: poetry run python validation/src/precheck_costs.py
       - name: Signature gate

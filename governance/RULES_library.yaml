@@ -9,3 +9,13 @@
   then:
     directional: use_classifier
     risk_cap: high
+- id: exit_trend_rebalance
+  when: transition(trend->balance, prob>0.75)
+  then:
+    directional: unwind
+    risk_cap: low
+- id: hold_abstain_low_confidence
+  when: low_confidence(clarity<0.55 or abstain=true)
+  then:
+    directional: abstain
+    risk_cap: flat
