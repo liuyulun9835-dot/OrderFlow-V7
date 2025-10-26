@@ -1,1 +1,24 @@
-# placeholder for CONTROL_switch_policy.yaml
+schema_version: v7.0
+description: >-
+  Control gates for adaptive transition policy with clarity/abstain signalling.
+drift_metrics:
+  prototype_drift:
+    warn: 0.08
+    fail: 0.12
+    lookback_windows: 96
+calibration:
+  ece:
+    fail: 0.60
+  brier:
+    fail: 0.50
+abstain_rate:
+  min: 0.00
+  max: 0.30
+transition_hit_ratio:
+  min: 0.00
+clarity_mapping:
+  breakpoints: [0.0, 0.5, 0.7, 0.85, 1.0]
+  position_scale: [0.0, 0.2, 0.5, 0.8, 1.0]
+signatures:
+  last_reviewed: 2025-10-25
+  reviewer: risk-committee

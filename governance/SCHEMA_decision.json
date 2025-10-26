@@ -4,12 +4,22 @@
     "from": "balance",
     "to": "trend",
     "prob": 0.86,
-    "threshold": 0.8
+    "threshold": 0.80,
+    "reason": "tvtp_transition_gate"
   },
   "directional_classifier": {
     "label": "bullish",
     "confidence": 0.91,
     "inputs": ["MFI", "CVD", "informed_flow_proxy"]
   },
+  "clarity": {
+    "score": 0.72,
+    "bucket": "scale_3"
+  },
+  "abstain": {
+    "flag": false,
+    "rule": "low_confidence"
+  },
+  "reason": "transition_prob_above_threshold",
   "macro_factor_used": "MA_ratio"
 }

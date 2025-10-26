@@ -1,13 +1,45 @@
 {
+  "schema_version": "v7.0",
+  "_compat": {
+    "notes": "V7 introduces online clusterer config, clarity/abstain signals, and prototype drift gates"
+  },
+  "clusterer_config": {
+    "window_minutes": 240,
+    "k": 2,
+    "online_decay": 0.97,
+    "features": [
+      "bar_vpo_imbalance",
+      "bar_vpo_absorption",
+      "cvd_rolling",
+      "volprofile_skew"
+    ]
+  },
   "states": ["balance", "trend"],
   "tvtp": {
     "enabled": true,
-    "drivers": ["MFI", "CVD", "MA_ratio"],
-    "link": "logit"
+    "drivers": ["macro_regime", "volatility_slope"],
+    "link": "logit",
+    "learn": "transition_only"
+  },
+  "clarity": {
+    "range": [0.0, 1.0],
+    "default_gate": 0.65,
+    "mapping": "piecewise_linear"
+  },
+  "abstain": {
+    "enabled": true,
+    "rule": "low_confidence",
+    "threshold": 0.55
+  },
+  "prototype_drift": {
+    "metric": "wasserstein",
+    "lookback_windows": 96,
+    "warn": 0.08,
+    "fail": 0.12
   },
   "macro_factor_used": true,
   "signatures": {
-    "schema_version": "v2.0",
+    "schema_version": "v7.0",
     "build_id": "bootstrap",
     "data_manifest_hash": "pending",
     "calibration_hash": "pending"
