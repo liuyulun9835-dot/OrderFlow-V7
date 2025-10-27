@@ -1,1 +1,25 @@
-# placeholder for SCHEMA_execution.json
+{
+  "schema_version": "v7.0",
+  "description": "Execution contract for translating clarity/transition signals into position and abstain actions.",
+  "fields": {
+    "window_id": {"type": "string", "description": "Identifier of the validation window."},
+    "transition_prob": {"type": "float", "description": "TVTP probability of switching into trend."},
+    "clarity": {"type": "float", "description": "0-1 scaled separability confidence."},
+    "abstain": {"type": "bool", "description": "Flag to skip execution when clarity or drift fails."},
+    "position_scale": {"type": "float", "description": "Position sizing factor derived from clarity mapping."},
+    "reason": {"type": "string", "description": "Textual reason for abstain or reduced exposure."}
+  },
+  "clarity_breakpoints": [0.0, 0.45, 0.6, 0.75, 0.9, 1.0],
+  "position_curve": [0.0, 0.1, 0.3, 0.6, 0.85, 1.0],
+  "abstain_policy": {
+    "min_clarity": 0.45,
+    "max_drift": 0.15,
+    "low_confidence_reason": "clarity_below_threshold",
+    "drift_reason": "prototype_drift_exceeds_gate"
+  },
+  "signatures": {
+    "schema_version": "v7.0",
+    "approved_by": "execution-committee",
+    "approved_on": "2025-10-26"
+  }
+}

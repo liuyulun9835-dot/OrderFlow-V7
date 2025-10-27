@@ -65,3 +65,4 @@ OrderFlow V7 聚焦“滚动可分性(A/B) + 自适应 TVTP(只学切换) + clar
 - 仍可参考《OrderFlow-V6项目说明书_修订_2.md》理解旧架构；迁移差异请以 `docs/MIGRATION_V6_TO_V7.md` 为准。
 - CI 会对治理 schema 与验证指标执行硬门控；若新增字段/指标，需同时更新 `CONTROL_switch_policy.yaml` 与 `validation/metrics.py`。
 - 产物签名记录写入 `output/signatures.json`，请在发布审核中附带。
+- 旧版 HSMM 相关代码已迁移至 `model/z_legacy/`，供对比与回溯使用。

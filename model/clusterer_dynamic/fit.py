@@ -24,6 +24,7 @@ class ClustererConfig:
     alignment_log: Path = Path("output/cluster_alignment.log")
     artifacts_path: Path = Path("model/clusterer_dynamic/cluster_artifacts.json")
     labels_output: Path = Path("output/clusterer_dynamic/labels_wt.parquet")
+    alignment_report: Path = Path("output/clusterer_dynamic/label_alignment_report.md")
 
 
 def _load_window(dataset: pd.DataFrame, feature_columns: Sequence[str], window_size: int) -> pd.DataFrame:
@@ -103,6 +104,33 @@ def _write_alignment_log(path: Path, swapped: bool, drift: float, window_size: i
     path.write_text(path.read_text() + message if path.exists() else message)
 
 
+def _resolve_window_id(window: pd.DataFrame) -> str:
+    if "window_id" in window.columns and window["window_id"].notna().any():
+        return str(window["window_id"].iloc[-1])
+    if "minute_close" in window.columns and window["minute_close"].notna().any():
+        return str(window["minute_close"].iloc[-1])
+    return f"tail_{len(window)}"
+
+
+def _write_alignment_report(path: Path, window_id: str, swapped: bool, drift: float) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    stability = max(0.0, 1.0 - drift)
+    swap_count = int(swapped)
+    ari = 0.0
+    ami = 0.0
+    hamming = float(swap_count)
+    lines = [
+        "# Clusterer Dynamic — Label Alignment Report",
+        "",
+        "| window_id | swap_count | stability | ARI | AMI | hamming_distance |",
+        "| --- | --- | --- | --- | --- | --- |",
+        f"| {window_id} | {swap_count} | {stability:.4f} | {ari:.4f} | {ami:.4f} | {hamming:.4f} |",
+        "",
+        "> ARI/AMI/Hamming placeholders will be replaced once historical alignment tracking is wired in.",
+    ]
+    path.write_text("\n".join(lines))
+
+
 def _export_labels(dataset: pd.DataFrame, labels: np.ndarray, weights: np.ndarray, output_path: Path) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     enriched = dataset.copy()
@@ -143,6 +171,8 @@ def run(dataset: pd.DataFrame, config: ClustererConfig) -> Dict[str, float]:
     _export_labels(window.assign(timestamp=window.index), labels, weights, config.labels_output)
     _save_artifacts(centroids_aligned, drift_value, config.artifacts_path)
     _write_alignment_log(config.alignment_log, swapped, drift_value, config.window_size)
+    window_identifier = _resolve_window_id(window)
+    _write_alignment_report(config.alignment_report, window_identifier, swapped, drift_value)
 
     LOGGER.info("clusterer_dynamic fit complete: drift=%.4f swapped=%s", drift_value, swapped)
     return {"prototype_drift": drift_value, "label_switch": swapped}

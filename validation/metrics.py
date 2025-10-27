@@ -1,12 +1,11 @@
-"""Validation metrics summary for V7 pipeline."""
-from __future__ import annotations
-
-import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Optional
+
+import json
 
 import pandas as pd
+import yaml
 
 from model.hmm_tvtp_adaptive.train import _expected_calibration_error as compute_ece
 from model.hmm_tvtp_adaptive.train import _brier_score as compute_brier
@@ -18,6 +17,7 @@ class MetricConfig:
     cluster_artifacts: Path = Path("model/clusterer_dynamic/cluster_artifacts.json")
     metrics_json: Path = Path("validation/metrics_summary.json")
     metrics_markdown: Path = Path("validation/VALIDATION.md")
+    control_yaml: Path = Path("governance/CONTROL_switch_policy.yaml")
 
 
 def _load_cluster_drift(path: Path) -> float:
@@ -49,7 +49,14 @@ def _transition_hit_ratio(frame: pd.DataFrame, gate: float) -> float:
     return float(hits)
 
 
-def summarise(frame: pd.DataFrame, config: MetricConfig) -> dict:
+def _load_control_thresholds(path: Path) -> Dict[str, Dict[str, float]]:
+    if not path.exists():
+        return {}
+    raw = yaml.safe_load(path.read_text()) or {}
+    return raw.get("thresholds", {})
+
+
+def summarise(frame: pd.DataFrame, config: MetricConfig) -> Dict[str, float]:
     frame = _ensure_columns(frame.copy())
     probs = frame["transition_prob"].to_numpy(dtype=float)
     actual = frame["actual_transition"].to_numpy(dtype=float)
@@ -61,30 +68,63 @@ def summarise(frame: pd.DataFrame, config: MetricConfig) -> dict:
     prototype_drift = _load_cluster_drift(config.cluster_artifacts)
 
     metrics = {
-        "prototype_drift": prototype_drift,
-        "ece": ece,
-        "brier": brier,
-        "abstain_rate": abstain_rate,
-        "transition_hit_ratio": hit_ratio,
+        "prototype_drift": float(prototype_drift),
+        "ece": 0.0 if pd.isna(ece) else float(ece),
+        "brier": float(brier),
+        "abstain_rate": float(abstain_rate),
+        "transition_hit_ratio": float(hit_ratio),
         "count": int(frame.shape[0]),
     }
     return metrics
 
 
-def _write_markdown(metrics: dict, config: MetricConfig) -> None:
-    lines = ["# VALIDATION — V7 Metrics", "", "| Metric | Value |", "| --- | --- |"]
+def _format_gate(metric: str, thresholds: Dict[str, Dict[str, float]]) -> str:
+    gate = thresholds.get(metric)
+    if gate is None:
+        return "-"
+    if isinstance(gate, dict):
+        if {"min", "max"} <= gate.keys():
+            return f"{gate['min']:.2f}–{gate['max']:.2f}"
+        if "min" in gate:
+            return f">= {gate['min']:.2f}"
+        if "max" in gate:
+            return f"<= {gate['max']:.2f}"
+        if "fail" in gate:
+            return f"<= {gate['fail']:.2f}"
+        if "gate" in gate:
+            return f">= {gate['gate']:.2f}"
+    if isinstance(gate, (int, float)):
+        return f"{gate:.2f}"
+    return "-"
+
+
+def _write_markdown(metrics: Dict[str, float], config: MetricConfig, thresholds: Dict[str, Dict[str, float]]) -> None:
+    lines = ["# VALIDATION — V7 Metrics", "", "| Metric | Value | Gate | Notes |", "| --- | --- | --- | --- |"]
+    notes = {
+        "prototype_drift": "Scaled Euclidean drift of cluster centroids",
+        "ece": "Expected calibration error of transition probability",
+        "brier": "Brier score of transition probability",
+        "abstain_rate": "Share of observations abstaining",
+        "transition_hit_ratio": f"Trigger gate uses transition_prob >= {config.transition_gate:.2f}",
+        "count": "Sample size"
+    }
     for key, value in metrics.items():
-        lines.append(f"| {key} | {value:.4f} |" if isinstance(value, float) else f"| {key} | {value} |")
+        display = f"{value:.4f}" if isinstance(value, float) else str(value)
+        lines.append(f"| {key} | {display} | {_format_gate(key, thresholds)} | {notes.get(key, '')} |")
+    lines.append("")
+    lines.append("> Gates sourced from governance/CONTROL_switch_policy.yaml")
     config.metrics_markdown.parent.mkdir(parents=True, exist_ok=True)
     config.metrics_markdown.write_text("\n".join(lines))
 
 
-def write_reports(frame: pd.DataFrame, config: Optional[MetricConfig] = None) -> dict:
+def write_reports(frame: pd.DataFrame, config: Optional[MetricConfig] = None) -> Dict[str, float]:
     cfg = config or MetricConfig()
     metrics = summarise(frame, cfg)
+    thresholds = _load_control_thresholds(cfg.control_yaml)
+    payload = {"metrics": metrics, "thresholds": thresholds}
     cfg.metrics_json.parent.mkdir(parents=True, exist_ok=True)
-    cfg.metrics_json.write_text(json.dumps(metrics, indent=2, sort_keys=True))
-    _write_markdown(metrics, cfg)
+    cfg.metrics_json.write_text(json.dumps(payload, indent=2, sort_keys=True))
+    _write_markdown(metrics, cfg, thresholds)
     return metrics
 
 
