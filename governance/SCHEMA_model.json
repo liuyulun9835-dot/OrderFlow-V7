@@ -14,15 +14,24 @@
       "volprofile_skew"
     ]
   },
-  "states": ["balance", "trend"],
+  "states": [
+    "balance",
+    "trend"
+  ],
   "tvtp": {
     "enabled": true,
-    "drivers": ["macro_regime", "volatility_slope"],
+    "drivers": [
+      "macro_regime",
+      "volatility_slope"
+    ],
     "link": "logit",
     "learn": "transition_only"
   },
   "clarity": {
-    "range": [0.0, 1.0],
+    "range": [
+      0.0,
+      1.0
+    ],
     "default_gate": 0.65,
     "mapping": "piecewise_linear"
   },
@@ -43,5 +52,9 @@
     "build_id": "bootstrap",
     "data_manifest_hash": "pending",
     "calibration_hash": "pending"
+  },
+  "label_map": {
+    "A": "balance",
+    "B": "trend"
   }
 }

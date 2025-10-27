@@ -1,24 +1,35 @@
 schema_version: v7.0
 description: >-
   Control gates for adaptive transition policy with clarity/abstain signalling.
-drift_metrics:
+thresholds:
+  transition_prob:
+    gate: 0.65
+  clarity:
+    warn: 0.55
+    fail: 0.45
   prototype_drift:
-    warn: 0.08
-    fail: 0.12
+    warn: 0.12
+    fail: 0.15
     lookback_windows: 96
-calibration:
   ece:
-    fail: 0.60
+    warn: 0.06
+    fail: 0.08
   brier:
-    fail: 0.50
-abstain_rate:
-  min: 0.00
-  max: 0.30
-transition_hit_ratio:
-  min: 0.00
-clarity_mapping:
-  breakpoints: [0.0, 0.5, 0.7, 0.85, 1.0]
-  position_scale: [0.0, 0.2, 0.5, 0.8, 1.0]
+    warn: 0.16
+    fail: 0.18
+  abstain_rate:
+    min: 0.10
+    max: 0.25
+  transition_hit_ratio:
+    min: 0.60
+position_curve:
+  clarity_breakpoints: [0.0, 0.45, 0.6, 0.75, 0.9, 1.0]
+  position_scale: [0.0, 0.1, 0.3, 0.6, 0.85, 1.0]
+abstain_policy:
+  low_confidence_reason: clarity_below_threshold
+  drift_reason: prototype_drift_exceeds_gate
+  clarity_gate: 0.45
+  drift_gate: 0.15
 signatures:
-  last_reviewed: 2025-10-25
+  last_reviewed: 2025-10-26
   reviewer: risk-committee

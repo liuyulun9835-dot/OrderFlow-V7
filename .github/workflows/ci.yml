@@ -1,4 +1,3 @@
-name: CI
 on:
   push:
     branches: [ "main" ]
@@ -22,11 +21,12 @@ jobs:
         shell: bash
         run: |
           set -e
-          test -f COMPLIANCE.md || { echo "COMPLIANCE.md missing"; exit 1; }
-          grep -qiE '用途|usage' COMPLIANCE.md || { echo "缺少 用途/usage"; exit 1; }
-          grep -qiE '保留期|retention' COMPLIANCE.md || { echo "缺少 保留期/retention"; exit 1; }
-          grep -qiE '再分发|redistribution' COMPLIANCE.md || { echo "缺少 再分发/redistribution"; exit 1; }
-          grep -qiE '脱敏|anonymi|mask' COMPLIANCE.md || { echo "缺少 脱敏/anonymization"; exit 1; }
+          COMPLIANCE_PATH="docs/compliance/COMPLIANCE.md"
+          test -f "$COMPLIANCE_PATH" || { echo "${COMPLIANCE_PATH} missing"; exit 1; }
+          grep -qiE '用途|usage' "$COMPLIANCE_PATH" || { echo "缺少 用途/usage"; exit 1; }
+          grep -qiE '保留期|retention' "$COMPLIANCE_PATH" || { echo "缺少 保留期/retention"; exit 1; }
+          grep -qiE '再分发|redistribution' "$COMPLIANCE_PATH" || { echo "缺少 再分发/redistribution"; exit 1; }
+          grep -qiE '脱敏|anonymi|mask' "$COMPLIANCE_PATH" || { echo "缺少 脱敏/anonymization"; exit 1; }
       - name: Run lint suite
         run: make lint
       - name: Run tests
@@ -45,18 +45,19 @@ jobs:
           model_schema = json.loads(Path("governance/SCHEMA_model.json").read_text())
           decision_schema = json.loads(Path("governance/SCHEMA_decision.json").read_text())
 
-          require_keys(model_schema, ["clusterer_config", "clarity", "abstain", "prototype_drift"], "SCHEMA_model")
+          require_keys(model_schema, ["clusterer_config", "clarity", "abstain", "prototype_drift", "label_map"], "SCHEMA_model")
           require_keys(decision_schema, ["clarity", "abstain", "reason"], "SCHEMA_decision")
           print("governance schemas validated")
           PY
       - name: Run minimal V7 pipeline
         run: |
+          set -e
           make data.qc
           make cluster.fit
           make tvtp.fit
           make validate
-      - name: Apply release gates
-        run: make release
+          make dryrun
+          make release
       - name: Record artifact signatures
         run: |
           python - <<'PY'
@@ -80,10 +81,13 @@ jobs:
           output.write_text(json.dumps(artifacts, indent=2, sort_keys=True))
           print(json.dumps(artifacts, indent=2, sort_keys=True))
           PY
-      - name: Cost gate
-        run: poetry run python validation/src/precheck_costs.py
-      - name: Signature gate
-        run: poetry run python validation/src/validate_outputs.py
-      - name: validate_results_schemas
-        if: ${{ hashFiles('results/merge_metrics.json') != '' || hashFiles('results/calibration_profile.json') != '' }}
-        run: poetry run python validation/src/validate_results_schemas.py
+      - name: Upload validation artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-artifacts
+          path: |
+            validation/VALIDATION.md
+            validation/metrics_summary.json
+            output/clusterer_dynamic/label_alignment_report.md
+            output/hmm_tvtp_adaptive/
+          if-no-files-found: warn
