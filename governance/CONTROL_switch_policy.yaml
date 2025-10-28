@@ -1,57 +1,27 @@
-schema_version: v7.1
-description: >-
-  Control gates for adaptive transition policy with clarity/abstain signalling.
-  Extended in v7.1 with stability gate metrics.
-thresholds:
-  transition_prob:
-    gate: 0.65
-  clarity:
-    warn: 0.55
-    fail: 0.45
-  prototype_drift:
-    warn: 0.12
-    fail: 0.15
-    lookback_windows: 96
-  ece:
-    warn: 0.06
-    fail: 0.08
-  brier:
-    warn: 0.16
-    fail: 0.18
-  abstain_rate:
-    min: 0.10
-    max: 0.25
-  transition_hit_ratio:
-    min: 0.60
-  # V7.1 stability gate metrics
-  stability_index:
-    threshold: 0.60
-    description: "Overall stability index for model release"
-  noise_energy:
-    threshold: 0.30
-    description: "Maximum noise energy in low clarity intervals"
-  drift_bandwidth:
-    warn: 0.08
-    fail: 0.12
-    description: "Bandwidth proxy for prototype drift"
-  clarity_spectrum_power:
-    baseline: 0.001
-    warn: 0.005
-    fail: 0.010
-    description: "High-frequency power in clarity spectrum"
-  adversarial_gap:
-    warn: 0.15
-    fail: 0.25
-    description: "Robustness to input perturbations"
-position_curve:
-  clarity_breakpoints: [0.0, 0.45, 0.6, 0.75, 0.9, 1.0]
-  position_scale: [0.0, 0.1, 0.3, 0.6, 0.85, 1.0]
-abstain_policy:
-  low_confidence_reason: clarity_below_threshold
-  drift_reason: prototype_drift_exceeds_gate
-  clarity_gate: 0.45
-  drift_gate: 0.15
-signatures:
-  last_reviewed: 2025-10-28
-  reviewer: risk-committee
-  version: v7.1
+policy_version: "v7.1"
+gate:
+  mode: "strict"  # strict|permissive
+  rules:
+    - name: "clarity_min"
+      metric: "clarity.spectrum_power"
+      op: ">="
+      value: 0.62
+      severity: "fail"
+    - name: "noise_energy_max"
+      metric: "noise.energy"
+      op: "<="
+      value: 0.40
+      severity: "fail"
+    - name: "drift_bandwidth_max"
+      metric: "drift.bandwidth"
+      op: "<="
+      value: 0.25
+      severity: "warn"
+    - name: "adversarial_gap_max"
+      metric: "adversarial.gap"
+      op: "<="
+      value: 0.18
+      severity: "fail"
+notes: |
+  Single Source of Truth (SSOT) for model validation thresholds.
+  Consumed by validation/core/thresholds_loader.py and used by aggregator → publisher.

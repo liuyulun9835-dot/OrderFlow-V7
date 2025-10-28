@@ -1,5 +1,7 @@
 # OrderFlow V7 — Model Core
 
+> **本仓仅模型层（Model Core）。数据清洗/对齐/导出统一在 CentralDataKitchen（CDK）仓执行。**
+
 V7 提供“滚动可分性 + 自适应 TVTP + 稳定性门控”(Rolling separability + adaptive TVTP + stability gates) 的最小模型闭环。数据清洗、决策与执行均已外移，仓库专注于模型训练、校验与发布。
 
 ## 最小执行链
