@@ -1,6 +1,8 @@
 """
 V7.1 noise metric — clarity_spectrum_power
 定义：clarity 序列在高频带的平均功率，衡量“快速震荡的噪声能量”。
+
+# ADAPTER: planned to migrate to CDK
 输入：
     clarity_series: pd.Series[float]
     hi_band: tuple[float,float]，归一频带（0,0.5]，例如 (0.1, 0.5)
@@ -11,11 +13,16 @@ V7.1 noise metric — clarity_spectrum_power
     - 长度不足或异常返回 0。
 """
 from __future__ import annotations
-import numpy as np
-import pandas as pd
+
 from typing import Tuple
 
-def compute_clarity_spectrum_power(clarity_series: pd.Series, hi_band: Tuple[float, float] = (0.1, 0.5)) -> float:
+import numpy as np
+import pandas as pd
+
+
+def compute_clarity_spectrum_power(
+    clarity_series: pd.Series, hi_band: Tuple[float, float] = (0.1, 0.5)
+) -> float:
     """
     Compute average PSD in given normalized high-frequency band using FFT.
 
@@ -46,8 +53,10 @@ def compute_clarity_spectrum_power(clarity_series: pd.Series, hi_band: Tuple[flo
     band_power = float(np.mean(psd[band_mask]))
     return max(0.0, band_power)
 
+
 if __name__ == "__main__":
     import pandas as pd
+
     # synth low+high freq mixture
     n = 256
     t = np.arange(n)

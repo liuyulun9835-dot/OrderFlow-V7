@@ -1,5 +1,5 @@
-from pathlib import Path
 import re
+from pathlib import Path
 
 TREE = r"""
 /                                # 根目录：治理 / 控制 / 契约 层

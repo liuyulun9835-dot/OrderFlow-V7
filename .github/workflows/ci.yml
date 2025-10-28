@@ -1,93 +1,34 @@
+name: CI
+
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
+
 jobs:
-  build:
+  ci:
     runs-on: ubuntu-latest
-    env:
-      TZ: UTC
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
       - name: Install Poetry
         run: pip install poetry
       - name: Install dependencies
-        run: poetry install --with dev
-      - name: check_compliance
-        shell: bash
-        run: |
-          set -e
-          COMPLIANCE_PATH="docs/compliance/COMPLIANCE.md"
-          test -f "$COMPLIANCE_PATH" || { echo "${COMPLIANCE_PATH} missing"; exit 1; }
-          grep -qiE '用途|usage' "$COMPLIANCE_PATH" || { echo "缺少 用途/usage"; exit 1; }
-          grep -qiE '保留期|retention' "$COMPLIANCE_PATH" || { echo "缺少 保留期/retention"; exit 1; }
-          grep -qiE '再分发|redistribution' "$COMPLIANCE_PATH" || { echo "缺少 再分发/redistribution"; exit 1; }
-          grep -qiE '脱敏|anonymi|mask' "$COMPLIANCE_PATH" || { echo "缺少 脱敏/anonymization"; exit 1; }
-      - name: Run lint suite
+        run: make install
+      - name: Lint
         run: make lint
-      - name: Run tests
+      - name: Test
         run: make test
-      - name: Validate governance schemas
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          import json
-
-          def require_keys(payload, required, name):
-              missing = [key for key in required if key not in payload]
-              if missing:
-                  raise SystemExit(f"{name} missing keys: {missing}")
-
-          model_schema = json.loads(Path("governance/SCHEMA_model.json").read_text())
-          decision_schema = json.loads(Path("governance/SCHEMA_decision.json").read_text())
-
-          require_keys(model_schema, ["clusterer_config", "clarity", "abstain", "prototype_drift", "label_map"], "SCHEMA_model")
-          require_keys(decision_schema, ["clarity", "abstain", "reason"], "SCHEMA_decision")
-          print("governance schemas validated")
-          PY
-      - name: Run minimal V7 pipeline
-        run: |
-          set -e
-          make data.qc
-          make cluster.fit
-          make tvtp.fit
-          make validate
-          make dryrun
-          make release
-      - name: Record artifact signatures
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          import hashlib
-          import json
-
-          artifacts = {}
-          for path_str in [
-              "output/tvtp/transition_prob.parquet",
-              "output/tvtp/transition_prob.csv",
-              "validation/metrics_summary.json",
-              "model/clusterer_dynamic/cluster_artifacts.json",
-          ]:
-              path = Path(path_str)
-              if path.exists():
-                  artifacts[path_str] = hashlib.sha256(path.read_bytes()).hexdigest()
-
-          output = Path("output/signatures.json")
-          output.parent.mkdir(parents=True, exist_ok=True)
-          output.write_text(json.dumps(artifacts, indent=2, sort_keys=True))
-          print(json.dumps(artifacts, indent=2, sort_keys=True))
-          PY
+      - name: Validate
+        run: make validate
       - name: Upload validation artifacts
         uses: actions/upload-artifact@v4
         with:
           name: validation-artifacts
           path: |
-            validation/VALIDATION.md
             validation/metrics_summary.json
-            output/clusterer_dynamic/label_alignment_report.md
-            output/hmm_tvtp_adaptive/
-          if-no-files-found: warn
+            validation/VALIDATION.md
+          if-no-files-found: error

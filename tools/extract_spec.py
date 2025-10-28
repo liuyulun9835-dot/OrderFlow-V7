@@ -2,6 +2,7 @@
 WHY: 将自然语言要求 → 机器可检查的约束集合。
 """
 from __future__ import annotations
+
 import json
 import pathlib
 import sys

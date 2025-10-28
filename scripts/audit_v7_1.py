@@ -5,9 +5,9 @@ Minimal audit script for V7.1 stability unified changes. Checks presence of requ
 Writes a human-readable markdown report to output/audits/v7_1_audit.md.
 """
 from __future__ import annotations
-import os
+
 from pathlib import Path
-import json
+from typing import Any, Dict, List
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = ROOT / "output" / "audits"
@@ -29,12 +29,13 @@ for p in required_files:
     found[p] = (ROOT / p).exists()
 
 # simple YAML parse of validation file for thresholds if exists
-thresholds = {}
-gates = []
+thresholds: Dict[str, Any] = {}
+gates: List[Any] = []
 val_path = ROOT / "validation" / "noise_metrics.yaml"
 if val_path.exists():
     try:
-        import yaml
+        import yaml  # type: ignore[import-untyped]
+
         with open(val_path, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
             thresholds = data.get("thresholds", {}) or {}
@@ -47,7 +48,7 @@ if val_path.exists():
             gates = []
 
 # governance schema check (existence only)
-schema_model = (ROOT / "governance" / "SCHEMA_model.json")
+schema_model = ROOT / "governance" / "SCHEMA_model.json"
 schema_present = schema_model.exists()
 
 # Produce report
@@ -56,7 +57,7 @@ lines.append("# V7.1 Audit Report")
 lines.append("")
 lines.append("## Snapshot")
 lines.append("")
-lines.append(f"Branch: feat/v7_1-stability-unify")
+lines.append("Branch: feat/v7_1-stability-unify")
 lines.append("")
 lines.append("## File presence checks")
 lines.append("")
@@ -84,17 +85,23 @@ else:
 lines.append("")
 lines.append("## Governance schema check")
 lines.append("")
-lines.append(f"- governance/SCHEMA_model.json: {'FOUND' if schema_present else 'MISSING'}")
+lines.append(
+    f"- governance/SCHEMA_model.json: {'FOUND' if schema_present else 'MISSING'}"
+)
 
 lines.append("")
 lines.append("## Gate evaluation summary")
 lines.append("")
-lines.append("Note: No runtime production data provided; gate thresholds cannot be statistically evaluated. The audit validates file presence and gate definitions only.")
+lines.append(
+    "Note: No runtime production data provided; gate thresholds cannot be statistically evaluated. The audit validates file presence and gate definitions only."
+)
 
 lines.append("")
 lines.append("## Next steps")
 lines.append("")
-lines.append("- If you want numeric gate checks, provide a sample dataset or run this script in an environment with historical metrics available.")
+lines.append(
+    "- If you want numeric gate checks, provide a sample dataset or run this script in an environment with historical metrics available."
+)
 
 REPORT_PATH.write_text("\n".join(lines), encoding="utf-8")
-print(f'Wrote audit report to: {REPORT_PATH}')
+print(f"Wrote audit report to: {REPORT_PATH}")

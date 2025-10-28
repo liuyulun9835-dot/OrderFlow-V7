@@ -1,9 +1,10 @@
 [tool.poetry]
 name = "orderflow-v7"
-version = "0.1.0"
-description = "OrderFlow V6 quantitative trading strategy"
+version = "7.1.0"
+description = "Rolling separability + adaptive TVTP + stability gates"
 authors = ["Your Name <you@example.com>"]
 license = "MIT"
+package-mode = false
 
 [tool.poetry.dependencies]
 python = ">=3.10,<3.13"
@@ -29,6 +30,17 @@ mypy = "^1"
 
 [tool.poetry.extras]
 analytics = ["polars"]
+
+[tool.ruff]
+extend-select = ["TID251"]
+
+[tool.mypy]
+ignore_missing_imports = true
+
+[tool.isort]
+profile = "black"
+
+
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

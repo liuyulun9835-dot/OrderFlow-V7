@@ -1,0 +1,40 @@
+{
+  "metrics": {
+    "adversarial_gap": 0.00022002839370478252,
+    "clarity_spectrum_power": 6.548494273320854e-12,
+    "count": 128,
+    "drift_bandwidth": 0.002586327092036433,
+    "noise_energy": 0.0
+  },
+  "overall_status": "pass",
+  "statuses": {
+    "adversarial_gap": "pass",
+    "clarity_spectrum_power": "pass",
+    "count": "pass",
+    "drift_bandwidth": "pass",
+    "noise_energy": "pass"
+  },
+  "thresholds": {
+    "adversarial_gap": {
+      "fail": 0.25,
+      "gate": null,
+      "warn": 0.15
+    },
+    "clarity_spectrum_power": {
+      "fail": 0.01,
+      "gate": null,
+      "warn": 0.005
+    },
+    "count": {},
+    "drift_bandwidth": {
+      "fail": 0.12,
+      "gate": null,
+      "warn": 0.08
+    },
+    "noise_energy": {
+      "fail": null,
+      "gate": 0.3,
+      "warn": null
+    }
+  }
+}

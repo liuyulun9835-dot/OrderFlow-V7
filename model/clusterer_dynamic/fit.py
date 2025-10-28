@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Sequence, Tuple
@@ -27,7 +28,9 @@ class ClustererConfig:
     alignment_report: Path = Path("output/clusterer_dynamic/label_alignment_report.md")
 
 
-def _load_window(dataset: pd.DataFrame, feature_columns: Sequence[str], window_size: int) -> pd.DataFrame:
+def _load_window(
+    dataset: pd.DataFrame, feature_columns: Sequence[str], window_size: int
+) -> pd.DataFrame:
     if dataset.empty:
         raise ValueError("Feature dataset is empty; cannot fit clusterer")
 
@@ -55,7 +58,9 @@ def _online_update(data: np.ndarray, centroids: np.ndarray, decay: float) -> np.
     return updated
 
 
-def _assign_labels(data: np.ndarray, centroids: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+def _assign_labels(
+    data: np.ndarray, centroids: np.ndarray
+) -> Tuple[np.ndarray, np.ndarray]:
     distances = np.linalg.norm(data[:, None, :] - centroids[None, :, :], axis=2)
     labels = np.argmin(distances, axis=1)
     min_dist = distances[np.arange(distances.shape[0]), labels]
@@ -69,7 +74,9 @@ def _load_previous_artifacts(path: Path) -> Dict[str, List[float]]:
     return json.loads(path.read_text())
 
 
-def _compute_alignment(previous: Dict[str, List[float]], centroids: np.ndarray) -> Tuple[np.ndarray, bool]:
+def _compute_alignment(
+    previous: Dict[str, List[float]], centroids: np.ndarray
+) -> Tuple[np.ndarray, bool]:
     if not previous:
         return centroids, False
 
@@ -81,7 +88,9 @@ def _compute_alignment(previous: Dict[str, List[float]], centroids: np.ndarray) 
     best_perm = permutations[0]
     best_score = float("inf")
     for perm in permutations:
-        score = float(np.linalg.norm(previous_centroids - centroids[perm], axis=1).sum())
+        score = float(
+            np.linalg.norm(previous_centroids - centroids[perm], axis=1).sum()
+        )
         if score < best_score:
             best_score = score
             best_perm = perm
@@ -95,10 +104,14 @@ def _prototype_drift(previous: Dict[str, List[float]], centroids: np.ndarray) ->
     old = np.array(previous.get("centroids", centroids))
     if old.shape != centroids.shape:
         return float(np.linalg.norm(centroids))
-    return float(np.linalg.norm(old - centroids)) / max(float(np.linalg.norm(old)) + 1e-6, 1e-6)
+    return float(np.linalg.norm(old - centroids)) / max(
+        float(np.linalg.norm(old)) + 1e-6, 1e-6
+    )
 
 
-def _write_alignment_log(path: Path, swapped: bool, drift: float, window_size: int) -> None:
+def _write_alignment_log(
+    path: Path, swapped: bool, drift: float, window_size: int
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     message = f"window={window_size}, label_switch={int(swapped)}, prototype_drift={drift:.4f}\n"
     path.write_text(path.read_text() + message if path.exists() else message)
@@ -112,7 +125,9 @@ def _resolve_window_id(window: pd.DataFrame) -> str:
     return f"tail_{len(window)}"
 
 
-def _write_alignment_report(path: Path, window_id: str, swapped: bool, drift: float) -> None:
+def _write_alignment_report(
+    path: Path, window_id: str, swapped: bool, drift: float
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     stability = max(0.0, 1.0 - drift)
     swap_count = int(swapped)
@@ -131,7 +146,9 @@ def _write_alignment_report(path: Path, window_id: str, swapped: bool, drift: fl
     path.write_text("\n".join(lines))
 
 
-def _export_labels(dataset: pd.DataFrame, labels: np.ndarray, weights: np.ndarray, output_path: Path) -> None:
+def _export_labels(
+    dataset: pd.DataFrame, labels: np.ndarray, weights: np.ndarray, output_path: Path
+) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     enriched = dataset.copy()
     enriched["label"] = labels
@@ -141,7 +158,9 @@ def _export_labels(dataset: pd.DataFrame, labels: np.ndarray, weights: np.ndarra
     except Exception as exc:  # pragma: no cover - fallback path
         fallback = output_path.with_suffix(".csv")
         enriched.to_csv(fallback, index=False)
-        LOGGER.warning("parquet export failed (%s); wrote CSV fallback to %s", exc, fallback)
+        LOGGER.warning(
+            "parquet export failed (%s); wrote CSV fallback to %s", exc, fallback
+        )
 
 
 def _save_artifacts(centroids: np.ndarray, drift: float, path: Path) -> None:
@@ -168,13 +187,19 @@ def run(dataset: pd.DataFrame, config: ClustererConfig) -> Dict[str, float]:
 
     labels, weights = _assign_labels(data, centroids_aligned)
 
-    _export_labels(window.assign(timestamp=window.index), labels, weights, config.labels_output)
+    _export_labels(
+        window.assign(timestamp=window.index), labels, weights, config.labels_output
+    )
     _save_artifacts(centroids_aligned, drift_value, config.artifacts_path)
     _write_alignment_log(config.alignment_log, swapped, drift_value, config.window_size)
     window_identifier = _resolve_window_id(window)
-    _write_alignment_report(config.alignment_report, window_identifier, swapped, drift_value)
+    _write_alignment_report(
+        config.alignment_report, window_identifier, swapped, drift_value
+    )
 
-    LOGGER.info("clusterer_dynamic fit complete: drift=%.4f swapped=%s", drift_value, swapped)
+    LOGGER.info(
+        "clusterer_dynamic fit complete: drift=%.4f swapped=%s", drift_value, swapped
+    )
     return {"prototype_drift": drift_value, "label_switch": swapped}
 
 
@@ -182,4 +207,16 @@ def load_default_config(feature_columns: Iterable[str]) -> ClustererConfig:
     return ClustererConfig(feature_columns=list(feature_columns))
 
 
-__all__ = ["ClustererConfig", "load_default_config", "run"]
+def main() -> None:
+    warnings.warn(
+        "model.clusterer_dynamic.fit.main is deprecated; use model.hmm_tvtp_adaptive.train.run_training_pipeline",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    # TODO (sunset 2025-11-15, issue #130): remove pipeline proxy once callers migrate.
+    from model.hmm_tvtp_adaptive.train import run_training_pipeline
+
+    run_training_pipeline()
+
+
+__all__ = ["ClustererConfig", "load_default_config", "run", "main"]

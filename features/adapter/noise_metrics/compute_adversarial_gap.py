@@ -1,6 +1,8 @@
 """
 V7.1 noise metric — adversarial_gap
 定义：真实样本嵌入 vs 扰动样本嵌入的差距（gap），可用 MSE 或马氏距离。
+
+# ADAPTER: planned to migrate to CDK
 输入：
     embed_real: np.ndarray (N, D)
     embed_noisy: np.ndarray (N, D)  — 与真实一一对齐
@@ -10,8 +12,11 @@ V7.1 noise metric — adversarial_gap
     - 缺省使用均方差（稳健简单）；若样本足够可切换到马氏距离。
 """
 from __future__ import annotations
-import numpy as np
+
 from typing import Literal
+
+import numpy as np
+
 
 def compute_adversarial_gap(
     embed_real: np.ndarray,
