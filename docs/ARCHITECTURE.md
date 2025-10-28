@@ -2,7 +2,7 @@
 
 > **本仓仅模型层（Model Core）。数据清洗/对齐/导出统一在 CentralDataKitchen（CDK）仓执行。**
 
-- 数据侧流程与特征构建请参见 CDK 文档；本仓仅消费 [接口白名单](INTERFACE_WHITELIST.md) 中约定的输入契约。
+- 数据侧详见 CentralDataKitchen 文档；本仓仅消费 [接口白名单](INTERFACE_WHITELIST.md) 中约定的输入契约。
 - 模型发布后仅暴露模型产物、签名与验证结果给决策层。
 
 ## Version History

@@ -1,18 +1,18 @@
 .PHONY: install lint test validate release
 
 install:
-python -m pip install -U pip
-pip install -e .[dev]
+	python -m pip install -U pip
+	pip install -e .[dev]
 
 lint:
-python -m ruff check .
-python -m mypy .
+	python -m ruff check .
+	python -m mypy .
 
 test:
-pytest -q
+	pytest -q
 
 validate:
-python -m validation.core.aggregator --runs-dir validation/runs --out-dir validation
+	python -m validation.core.aggregator --runs-dir validation/runs --out-dir validation
 
 release: validate
-python publisher/publisher.py
+	python publisher/publisher.py

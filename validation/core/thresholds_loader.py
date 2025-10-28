@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-import yaml
 from pathlib import Path
+
+import yaml
+
 
 def load_policy(path: str | Path = "governance/CONTROL_switch_policy.yaml") -> dict:
     p = Path(path)
