@@ -1,0 +1,13 @@
+{
+  "coefficients": {
+    "macro_regime": 0.11944650752783695,
+    "volatility_slope": 0.16406828141097715
+  },
+  "feature_columns": [
+    "macro_regime",
+    "volatility_slope"
+  ],
+  "intercept": 0.10398431549083394,
+  "state_a": "A",
+  "state_b": "B"
+}
