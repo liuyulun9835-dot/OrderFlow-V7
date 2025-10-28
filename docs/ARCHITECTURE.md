@@ -1,8 +1,8 @@
 # ARCHITECTURE — V7.1 with Stability Gates
 
-```
-Data → Clusterer Dynamic → Adaptive TVTP → State Inference → Decision Engine → Validation → Stability Gates → Release
-```
+> **本仓仅模型层（Model Core）。数据清洗/对齐/导出统一在 CentralDataKitchen（CDK）仓执行。**
+
+详细的数据清洗与导出流程请参见 [CentralDataKitchen（CDK）文档](https://centraldatakitchen.example.com/docs)。
 
 ## Version History
 - **V7.0** (2025-10-26): Initial release with adaptive TVTP, clarity/abstain, and basic validation
@@ -10,8 +10,7 @@ Data → Clusterer Dynamic → Adaptive TVTP → State Inference → Decision En
 
 ## 层级结构
 1. **数据层**
-   - AB 双源（ATAS/Exchange）按 manifest 管理。
-   - `make data.qc` 生成 `output/calibration_report.md`（含缺失率/对齐结果）。
+   - 所有原始数据管理、清洗与导出在 CDK 仓进行，本仓直接消费符合接口契约的数据输出。
 2. **聚类层 (`model/clusterer_dynamic`)**
    - 输入：最近窗口微观特征（`bar_vpo_*`, `cvd`, `volprofile`）。
    - 过程：在线 K=2 聚类 + 标签对齐（Hungarian 简化）+ prototype_drift 计算。
@@ -31,7 +30,7 @@ Data → Clusterer Dynamic → Adaptive TVTP → State Inference → Decision En
 7. **稳定性门控层 (V7.1 新增)**
    - 计算稳定性指标：`noise_energy`、`drift_bandwidth`、`clarity_spectrum_power`、`adversarial_gap`。
    - 脚本：`validation/compute_*.py`（各指标独立脚本）。
-   - 阈值：读取 `validation/thresholds.yaml` 和 `CONTROL_switch_policy.yaml`。
+   - 阈值：由 `validation/core/thresholds_loader.py` 从 `governance/CONTROL_switch_policy.yaml` 统一加载。
    - 规则评估：基于 `governance/RULES_validation.yaml` 执行门控逻辑。
    - 输出：带状态的验证报告（pass/warn/fail）。
 8. **发布门控**
@@ -52,17 +51,14 @@ Data → Clusterer Dynamic → Adaptive TVTP → State Inference → Decision En
 | validation.compute_adversarial_gap | embeddings | float | 噪声嵌入距离 |
 
 ## 门控/阈值
-- `governance/CONTROL_switch_policy.yaml` (V7.1 扩展)
-  - `drift_metrics.prototype_drift.{warn,fail}`
-  - `calibration.{ece.fail, brier.fail}`
-  - `stability.{stability_index.threshold, noise_energy.threshold}` (新增)
-  - `drift.drift_bandwidth.{warn,fail}` (新增)
-  - `clarity.clarity_spectrum_power.{warn,fail}` (新增)
-  - `robustness.adversarial_gap.{warn,fail}` (新增)
-- `validation/thresholds.yaml` (V7.1 新增)
-  - 集中管理所有阈值定义
-  - 支持 baseline/warn/fail 多级阈值
-- `governance/RULES_validation.yaml` (V7.1 新增)
+- `governance/CONTROL_switch_policy.yaml`（V7.1 单一真值源）
+  - `clarity.spectrum_power ≥ 0.62`
+  - `noise.energy ≤ 0.40`
+  - `drift.bandwidth ≤ 0.25`
+  - `adversarial.gap ≤ 0.18`
+- `validation/thresholds.yaml`
+  - 记录治理文件来源，保留历史兼容入口
+- `governance/RULES_validation.yaml`
   - 20+ 条验证规则
   - 支持 critical/warning/info 严重级别
   - `abstain_rate.{min,max}`

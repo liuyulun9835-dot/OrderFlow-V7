@@ -48,3 +48,6 @@
 2. 所有报告需在 `output/results/` 或 `output/qa/` 中保留，并在 `output/report/release.yml` 中引用版本号与签名。
 3. 若新增卡片或产物，请同步更新本表，以保持单一事实来源。
 
+## 治理单一真值源
+所有验证与发布环节的阈值定义统一来自 `governance/CONTROL_switch_policy.yaml`，由验证聚合器与发布门控共同消费，避免多处重复配置。
+
