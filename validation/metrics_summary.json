@@ -1,0 +1,67 @@
+{
+  "metrics": {
+    "abstain_rate": 0.0,
+    "adversarial_gap": 0.0,
+    "brier": 0.0,
+    "clarity_spectrum_power": 0.0,
+    "count": 0,
+    "drift_bandwidth": 0.0,
+    "ece": 0.0,
+    "noise_energy": 0.0,
+    "prototype_drift": 0.0,
+    "transition_hit_ratio": 0.0
+  },
+  "thresholds": {
+    "abstain_rate": {
+      "max": 0.25,
+      "min": 0.1
+    },
+    "adversarial_gap": {
+      "description": "Robustness to input perturbations",
+      "fail": 0.25,
+      "warn": 0.15
+    },
+    "brier": {
+      "fail": 0.18,
+      "warn": 0.16
+    },
+    "clarity": {
+      "fail": 0.45,
+      "warn": 0.55
+    },
+    "clarity_spectrum_power": {
+      "baseline": 0.001,
+      "description": "High-frequency power in clarity spectrum",
+      "fail": 0.01,
+      "warn": 0.005
+    },
+    "drift_bandwidth": {
+      "description": "Bandwidth proxy for prototype drift",
+      "fail": 0.12,
+      "warn": 0.08
+    },
+    "ece": {
+      "fail": 0.08,
+      "warn": 0.06
+    },
+    "noise_energy": {
+      "description": "Maximum noise energy in low clarity intervals",
+      "threshold": 0.3
+    },
+    "prototype_drift": {
+      "fail": 0.15,
+      "lookback_windows": 96,
+      "warn": 0.12
+    },
+    "stability_index": {
+      "description": "Overall stability index for model release",
+      "threshold": 0.6
+    },
+    "transition_hit_ratio": {
+      "min": 0.6
+    },
+    "transition_prob": {
+      "gate": 0.65
+    }
+  }
+}
