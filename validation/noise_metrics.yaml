@@ -1,0 +1,16 @@
+# V7.1 noise metrics gates (stability unified)
+thresholds:
+  stability_index: 0.60
+  noise_energy: 0.30
+  drift_bandwidth: auto   # 建议以历史中位数 + 1σ 自动回推
+  clarity_spectrum_power: auto
+gates:
+  - "stability_index > thresholds.stability_index"
+  - "noise_energy < thresholds.noise_energy"
+reporting:
+  output_markdown: "docs/VALIDATION.md"
+  window_days: 14
+notes:
+  - "stability_index = clarity * (1 - noise_energy_norm)（若使用标定表，以标定优先）"
+  - "auto 阈值由历史统计回推：init = median + 1σ（方向取不利侧）"
+  - "这些指标仅用于评估/门控/仓位修正，不新增模型分支"
