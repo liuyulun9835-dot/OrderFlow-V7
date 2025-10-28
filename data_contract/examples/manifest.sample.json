@@ -1,0 +1,11 @@
+{
+  "schema_version": "v6.3",
+  "snapshot_id": "BTCUSDT-2025-10-24",
+  "symbol": "BTCUSDT",
+  "tz": "UTC",
+  "row_count": 123456,
+  "start_ts_utc": "2025-10-24T00:00:00Z",
+  "end_ts_utc": "2025-10-24T23:59:59Z",
+  "feature_set": ["price", "cvd", "bar_vpo_*"],
+  "hash": "deadbeef..."
+}

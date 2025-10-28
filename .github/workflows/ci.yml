@@ -1,24 +1,16 @@
-name: CI
-
+name: v7-ci
 on:
-  push:
-    branches: ["main"]
-  pull_request:
-    branches: ["main"]
+  push: { branches: [ main, feat/**, chore/**, refactor/** ] }
+  pull_request: { branches: [ main ] }
 
 jobs:
   ci:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - name: Install Poetry
-        run: pip install poetry
-      - name: Install dependencies
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - name: Install
         run: make install
       - name: Lint
         run: make lint
@@ -27,10 +19,10 @@ jobs:
       - name: Validate
         run: make validate
       - name: Upload validation artifacts
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: validation-artifacts
           path: |
             validation/metrics_summary.json
             validation/VALIDATION.md
-          if-no-files-found: error

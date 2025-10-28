@@ -2,79 +2,38 @@
 
 > **本仓仅模型层（Model Core）。数据清洗/对齐/导出统一在 CentralDataKitchen（CDK）仓执行。**
 
-详细的数据清洗与导出流程请参见 [CentralDataKitchen（CDK）文档](https://centraldatakitchen.example.com/docs)。
+- 数据侧流程与特征构建请参见 CDK 文档；本仓仅消费 [接口白名单](INTERFACE_WHITELIST.md) 中约定的输入契约。
+- 模型发布后仅暴露模型产物、签名与验证结果给决策层。
 
 ## Version History
 - **V7.0** (2025-10-26): Initial release with adaptive TVTP, clarity/abstain, and basic validation
 - **V7.1** (2025-10-28): Added stability gate metrics for enhanced operational validation
 
-## 层级结构
-1. **数据层**
-   - 所有原始数据管理、清洗与导出在 CDK 仓进行，本仓直接消费符合接口契约的数据输出。
-2. **聚类层 (`model/clusterer_dynamic`)**
-   - 输入：最近窗口微观特征（`bar_vpo_*`, `cvd`, `volprofile`）。
-   - 过程：在线 K=2 聚类 + 标签对齐（Hungarian 简化）+ prototype_drift 计算。
-   - 输出：`output/clusterer_dynamic/labels_wt.parquet`（或 CSV fallback）、`model/clusterer_dynamic/cluster_artifacts.json`、`output/cluster_alignment.log`。
-3. **TVTP 层 (`model/hmm_tvtp_adaptive`)**
-   - 输入：A/B 标签 + 宏观慢变量。
-   - 训练：仅学习 A→B 切换概率，使用简化 Logistic SGD。
-   - 输出：`output/tvtp/transition_prob.parquet`（或 CSV）、`output/tvtp/calibration_report.json`、`model/hmm_tvtp_adaptive/artifacts/model_params.json`。
-4. **状态推断 (`model/hmm_tvtp_adaptive/state_inference.py`)**
-   - 根据保存的系数输出 `transition_prob`、clarity（熵归一化）与 `abstain`。
-5. **决策层 (`decision/engine.py`)**
-   - 逻辑：`transition_prob > τ` 才调用方向判断器，clarity→position 映射表来自 `CONTROL_switch_policy.yaml`。
-   - `abstain=True` 时仓位强制 0，并写入 reason。
-6. **验证层 (`validation/metrics.py`)**
-   - 聚合 `prototype_drift`（读取聚类 artifacts）、`ECE/Brier/abstain_rate/transition_hit_ratio`。
+## 层级结构（模型域）
+1. **聚类层 (`model/clusterer_dynamic`)**
+   - 输入：来自 CDK 的窗口化特征。
+   - 输出：`model/clusterer_dynamic/cluster_artifacts.json` 等模型工件，用于状态推断。
+2. **TVTP 层 (`model/hmm_tvtp_adaptive`)**
+   - 输入：聚类标签 + 慢变量。
+   - 输出：`model/hmm_tvtp_adaptive/artifacts/model_params.json` 与过渡概率表。
+3. **状态推断 (`model/hmm_tvtp_adaptive/state_inference.py`)**
+   - 生成 `transition_prob`、`clarity`、`abstain` 等信号供决策层读取。
+4. **验证层 (`validation/`)**
+   - 聚合 `prototype_drift`、`ECE/Brier/abstain_rate/transition_hit_ratio` 等指标。
    - 输出：`validation/metrics_summary.json`、`validation/VALIDATION.md`。
-7. **稳定性门控层 (V7.1 新增)**
-   - 计算稳定性指标：`noise_energy`、`drift_bandwidth`、`clarity_spectrum_power`、`adversarial_gap`。
-   - 脚本：`validation/compute_*.py`（各指标独立脚本）。
-   - 阈值：由 `validation/core/thresholds_loader.py` 从 `governance/CONTROL_switch_policy.yaml` 统一加载。
-   - 规则评估：基于 `governance/RULES_validation.yaml` 执行门控逻辑。
-   - 输出：带状态的验证报告（pass/warn/fail）。
-8. **发布门控**
-   - `make release` 读取 `CONTROL_switch_policy.yaml` 的阈值，对验证指标执行硬门控并写入 `output/signatures.json`。
-   - V7.1 新增：critical 级别的稳定性指标失败将阻止发布。
+5. **稳定性门控层 (V7.1)**
+   - 计算 `noise_energy`、`drift_bandwidth`、`clarity_spectrum_power`、`adversarial_gap`。
+   - 阈值来自 `governance/CONTROL_switch_policy.yaml`，由 `validation/core/thresholds_loader.py` 加载。
+6. **发布门控**
+   - `make release` 聚合验证指标与治理阈值，生成 `models/<MODEL_NAME>/` 产物与 `status/model_core.json`。
 
-## I/O 契约摘要
-| 模块 | 输入 | 输出 | 备注 |
-| --- | --- | --- | --- |
-| clusterer_dynamic | `DataFrame[features]` | `labels_wt.parquet`, `cluster_artifacts.json`, `cluster_alignment.log` | 支持 CSV fallback |
-| hmm_tvtp_adaptive.train | `DataFrame[state + macros]` | `transition_prob.parquet`, `calibration_report.json`, `model_params.json` | A→B 切换数据子集 |
-| hmm_tvtp_adaptive.state_inference | `DataFrame[features]` | `DataFrame[transition_prob, clarity, abstain, reason]` | clarity 基于熵 |
-| decision.engine | direction features + inference 输出 | `DecisionResult`（label, position_size, abstain, reason, transition_prob, clarity） | position_size 来自 clarity breakpoints |
-| validation.metrics | `DataFrame[transition_prob, actual_transition, clarity, abstain]` | `metrics_summary.json`, `VALIDATION.md` | 自动补全缺失列 |
-| validation.compute_noise_energy | clarity, predictions | float | 低置信区间方差能量 |
-| validation.compute_drift_bandwidth | prototype history | float | 原型一阶差分带宽 |
-| validation.compute_clarity_spectrum_power | clarity time series | float | 清晰度高频功率谱 |
-| validation.compute_adversarial_gap | embeddings | float | 噪声嵌入距离 |
-
-## 门控/阈值
-- `governance/CONTROL_switch_policy.yaml`（V7.1 单一真值源）
-  - `clarity.spectrum_power ≥ 0.62`
-  - `noise.energy ≤ 0.40`
-  - `drift.bandwidth ≤ 0.25`
-  - `adversarial.gap ≤ 0.18`
-- `validation/thresholds.yaml`
-  - 记录治理文件来源，保留历史兼容入口
-- `governance/RULES_validation.yaml`
-  - 20+ 条验证规则
-  - 支持 critical/warning/info 严重级别
-  - `abstain_rate.{min,max}`
-  - `transition_hit_ratio.min`
-  - `clarity_mapping.{breakpoints,position_scale}`
-- CI 在 `make release` 阶段执行门控；指标超阈值将触发失败。
+## 治理要点
+- 唯一阈值来源：`governance/CONTROL_switch_policy.yaml`。
+- 发布签名：`models/<MODEL_NAME>/signature.json`。
+- 验证报告：`validation/VALIDATION.md`（自动生成）。
+- 产物与指标需满足 [接口白名单](INTERFACE_WHITELIST.md) 约束后才能发布。
 
 ## 与 V6 差异
 - 聚类/TVTP 拆分为独立模块，便于滚动更新与漂移监控。
-- 决策层明确 clarity→position 映射与 `abstain` 分支，避免低置信度误触发。
-- 验证指标集中在单一入口 `validation/metrics.py`，输出结构化 JSON + Markdown。
-- CI 新增治理 schema 校验、最小链路跑通与产物签名步骤。
-
-## V7.1 新增特性
-- **稳定性门控层**：新增 4 个稳定性指标（noise_energy, drift_bandwidth, clarity_spectrum_power, adversarial_gap）
-- **多级阈值系统**：baseline/warn/fail 三级阈值支持，提供更细粒度的质量控制
-- **规则引擎**：基于 YAML 的验证规则库，支持 20+ 条可配置规则
-- **增强的治理框架**：新增 `SCHEMA_validation.json` 和 `RULES_validation.yaml`
-- **自动化门控评估**：Critical 级别失败自动阻止发布，warning 级别需人工审核
+- 稳定性指标统一纳入验证层，自动门控关键阈值。
+- 治理文件集中在 `governance/`，减少发布耦合。
