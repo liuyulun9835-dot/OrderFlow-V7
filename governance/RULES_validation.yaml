@@ -1,0 +1,225 @@
+schema_version: v7.1
+description: >-
+  Validation rules library for OrderFlow V7.1 stability gates.
+  Defines decision rules, conditions, and actions for validation metrics.
+
+# Stability gate rules
+stability_gates:
+  STAB-001:
+    name: "stability_index_check"
+    condition: "stability_index >= 0.60"
+    action: "pass"
+    failure_action: "block_release"
+    severity: "critical"
+    message: "Stability index must be at least 0.60 for release"
+  
+  STAB-002:
+    name: "noise_energy_check"
+    condition: "noise_energy <= 0.30"
+    action: "pass"
+    failure_action: "block_release"
+    severity: "critical"
+    message: "Noise energy must not exceed 0.30 in low clarity intervals"
+
+# Drift monitoring rules
+drift_gates:
+  DRIFT-001:
+    name: "prototype_drift_warning"
+    condition: "prototype_drift <= 0.12"
+    action: "pass"
+    failure_action: "log_warning"
+    severity: "warning"
+    message: "Prototype drift exceeds warning threshold (0.12)"
+  
+  DRIFT-002:
+    name: "prototype_drift_failure"
+    condition: "prototype_drift <= 0.15"
+    action: "pass"
+    failure_action: "block_release"
+    severity: "critical"
+    message: "Prototype drift exceeds failure threshold (0.15)"
+  
+  DRIFT-003:
+    name: "drift_bandwidth_warning"
+    condition: "drift_bandwidth <= 0.08"
+    action: "pass"
+    failure_action: "log_warning"
+    severity: "warning"
+    message: "Drift bandwidth exceeds warning threshold (0.08)"
+  
+  DRIFT-004:
+    name: "drift_bandwidth_failure"
+    condition: "drift_bandwidth <= 0.12"
+    action: "pass"
+    failure_action: "require_review"
+    severity: "high"
+    message: "Drift bandwidth exceeds failure threshold (0.12)"
+
+# Clarity and spectrum rules
+clarity_gates:
+  CLAR-001:
+    name: "clarity_spectrum_baseline"
+    condition: "clarity_spectrum_power <= 0.001"
+    action: "optimal"
+    failure_action: "continue"
+    severity: "info"
+    message: "Clarity spectrum is at baseline (low oscillation)"
+  
+  CLAR-002:
+    name: "clarity_spectrum_warning"
+    condition: "clarity_spectrum_power <= 0.005"
+    action: "pass"
+    failure_action: "log_warning"
+    severity: "warning"
+    message: "Elevated high-frequency oscillation in clarity signal"
+  
+  CLAR-003:
+    name: "clarity_spectrum_failure"
+    condition: "clarity_spectrum_power <= 0.010"
+    action: "pass"
+    failure_action: "require_review"
+    severity: "high"
+    message: "Excessive high-frequency oscillation indicates instability"
+
+# Robustness rules
+robustness_gates:
+  ROB-001:
+    name: "adversarial_gap_warning"
+    condition: "adversarial_gap <= 0.15"
+    action: "pass"
+    failure_action: "log_warning"
+    severity: "warning"
+    message: "Adversarial gap exceeds warning threshold (0.15)"
+  
+  ROB-002:
+    name: "adversarial_gap_failure"
+    condition: "adversarial_gap <= 0.25"
+    action: "pass"
+    failure_action: "require_review"
+    severity: "high"
+    message: "High adversarial gap indicates poor robustness to noise"
+
+# Calibration rules (inherited from v7.0)
+calibration_gates:
+  CAL-001:
+    name: "ece_warning"
+    condition: "ece <= 0.06"
+    action: "pass"
+    failure_action: "log_warning"
+    severity: "warning"
+    message: "ECE exceeds warning threshold (0.06)"
+  
+  CAL-002:
+    name: "ece_failure"
+    condition: "ece <= 0.08"
+    action: "pass"
+    failure_action: "block_release"
+    severity: "critical"
+    message: "ECE exceeds failure threshold (0.08)"
+  
+  CAL-003:
+    name: "brier_warning"
+    condition: "brier <= 0.16"
+    action: "pass"
+    failure_action: "log_warning"
+    severity: "warning"
+    message: "Brier score exceeds warning threshold (0.16)"
+  
+  CAL-004:
+    name: "brier_failure"
+    condition: "brier <= 0.18"
+    action: "pass"
+    failure_action: "block_release"
+    severity: "critical"
+    message: "Brier score exceeds failure threshold (0.18)"
+
+# Performance rules
+performance_gates:
+  PERF-001:
+    name: "transition_hit_ratio_check"
+    condition: "transition_hit_ratio >= 0.60"
+    action: "pass"
+    failure_action: "log_warning"
+    severity: "warning"
+    message: "Transition hit ratio below target (0.60)"
+  
+  PERF-002:
+    name: "abstain_rate_lower_bound"
+    condition: "abstain_rate >= 0.10"
+    action: "pass"
+    failure_action: "log_warning"
+    severity: "warning"
+    message: "Abstain rate below minimum (0.10) - may indicate over-confidence"
+  
+  PERF-003:
+    name: "abstain_rate_upper_bound"
+    condition: "abstain_rate <= 0.25"
+    action: "pass"
+    failure_action: "log_warning"
+    severity: "warning"
+    message: "Abstain rate above maximum (0.25) - may indicate under-confidence"
+
+# Composite rules (combining multiple metrics)
+composite_rules:
+  COMP-001:
+    name: "stability_comprehensive"
+    conditions:
+      - "stability_index >= 0.60"
+      - "noise_energy <= 0.30"
+      - "prototype_drift <= 0.15"
+    operator: "AND"
+    action: "pass_comprehensive_stability"
+    failure_action: "block_release"
+    severity: "critical"
+    message: "Comprehensive stability check failed"
+  
+  COMP-002:
+    name: "calibration_comprehensive"
+    conditions:
+      - "ece <= 0.08"
+      - "brier <= 0.18"
+    operator: "AND"
+    action: "pass_calibration"
+    failure_action: "block_release"
+    severity: "critical"
+    message: "Calibration metrics failed"
+
+# Rule execution order
+execution_order:
+  - stability_gates
+  - drift_gates
+  - clarity_gates
+  - robustness_gates
+  - calibration_gates
+  - performance_gates
+  - composite_rules
+
+# Action definitions
+actions:
+  pass:
+    description: "Metric passes gate check"
+    next_action: "continue"
+  
+  optimal:
+    description: "Metric is in optimal range"
+    next_action: "continue"
+  
+  log_warning:
+    description: "Log warning but allow continuation"
+    next_action: "continue_with_warning"
+    log_level: "WARNING"
+  
+  require_review:
+    description: "Require manual review before release"
+    next_action: "await_approval"
+    notify: ["stability-committee"]
+  
+  block_release:
+    description: "Block release until issue is resolved"
+    next_action: "halt"
+    notify: ["stability-committee", "release-manager"]
+
+signatures:
+  version: "7.1"
+  last_reviewed: 2025-10-28
+  reviewer: stability-committee
