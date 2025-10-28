@@ -1,130 +1,149 @@
-# TODO_V7 — Canonical Task Board
+"""markdown
+# TODO_V7.1 — Stability Unified Task Board
 
-> 最小执行链：`make data.qc → make cluster.fit → make tvtp.fit → make validate → make dryrun → make release`
-> 口径：V7 强调“滚动可分性(A/B) + 自适应 TVTP(只学切换) + clarity/abstain + 漂移与校准门控”；收益仅观察，不作为硬门控。
+> 最小执行链：`make data.qc → make cluster.fit → make tvtp.fit → make validate → make dryrun → make release`  
+> 口径：V7.1 在 V7 基础上引入“噪声观测四指标 + stability_index”，仅作为评估/门控/仓位修正项，不新增模型分支。
 
-> **来源收敛**：本版本汇总自《order_flow_v_6_todo.md》《docs/OrderFlow V6 — 任务卡片库V1.1.md》以及 2025-10-15 至 2025-10-24 的《docs/工程日志_*》条目，相关原始文档已归档至 `docs/_archive/`。
+> 说明：本文件在保留原有 TODO 条目与流程的基础上，追加与 V7.1（稳定性统一修订版）直接相关的任务与验收要求。与原 TODO 中不相关的条目保持原样（若本文件与仓库中原始 TODO 存在差异，请以此文件为 V7.1 的任务板主版本并在 PR 描述中标注变更点）。
 
 ## Milestones
-- **M0 最小闭环**：数据→聚类→TVTP→验证→干跑→发布门检跑通
-- **M1 校准&门控完整**：ECE/Brier、abstain、prototype_drift 纳入 CI；方向判断器改为“切换触发”
-- **M2 执行联调与成本鲁棒**：仿真接入成本模型；clarity→仓位曲线固化；门控稳态
+- **M0 最小闭环（7.1）**：数据 → 聚类 → TVTP → 验证 → 干跑 → 发布门检通过（含 stability/noise）
+- **M1 校准与门控达标**：ECE / Brier / abstain / prototype_drift / noise_energy / stability_index 全量进入 CI，并达成初始阈值覆盖
+- **M2 成本与执行**：clarity × stability 仓位修正曲线固化；成本鲁棒性场景化门检（base / +50% / ×2）
 
 ## Workflows
-### [GOV] 治理与契约
-- [ ] GOV-01 `SCHEMA_model.json` 增加 `clusterer_config/clarity/abstain/prototype_drift`  
-  - TAG: modify | OWNER: core | DUE: ____  
-  - ACCEPTANCE: jsonschema 校验通过；CI 阶段读取阈值不报错  
+
+### [GOV] 治理与契约（从 v7.0 → v7.1）
+- [ ] GOV-01 `SCHEMA_model.json` 升级至 v7.1，新增字段：
+      `noise_energy: float`, `stability_index: float`
   - OUT: governance/SCHEMA_model.json
-- [ ] GOV-02 `SCHEMA_decision.json` 增加 `clarity/abstain/reason`  
-  - TAG: modify | OWNER: core | DUE: ____  
-  - ACCEPTANCE: schema 校验通过；决策接口验收样例覆盖三态  
+  - ACCEPTANCE: `signatures.schema_version == "v7.1"` 且 jsonschema 校验通过
+
+- [ ] GOV-02 `SCHEMA_decision.json` 增补：
+      新增 `stability_index`, `reason` 字段，保留并校验 `clarity` / `abstain`
   - OUT: governance/SCHEMA_decision.json
-- [ ] GOV-03 `RULES_library.yaml` 新增 `transition(A->B, prob>τ)` 与 `low_confidence`  
-  - TAG: modify | OWNER: quant | DUE: ____  
-  - ACCEPTANCE: 规则编号齐全；CI 门检比对策略映射成功  
+  - ACCEPTANCE: jsonschema 校验通过，示例 manifest 能写入并读取
+
+- [ ] GOV-03 `RULES_library.yaml` 增加触发与动作：
+      新增触发 `on: high_noise`，默认动作建议 `reduce` / `abstain` / `escalate_to_risk`
   - OUT: governance/RULES_library.yaml
-- [ ] GOV-04 `CONTROL_switch_policy.yaml` 纳入 `drift_metrics/ECE/Brier/abstain_rate` 阈值  
-  - TAG: modify | OWNER: risk | DUE: ____  
-  - ACCEPTANCE: 门控配置与验证脚本联动；阈值缺失时报错  
+  - ACCEPTANCE: 新触发在规则解析器中可识别并在模拟事件中触发正确动作（单元测试）
+
+- [ ] GOV-04 `CONTROL_switch_policy.yaml` 纳入新门控源：
+      引用 `validation/noise_metrics.yaml` 中 thresholds，加入 `stability_index` / `noise_energy` 阈值与连续 K 窗口回滚规则
   - OUT: governance/CONTROL_switch_policy.yaml
+  - ACCEPTANCE: policy parser 能读取并在连续 K=3 窗口违例时输出回滚指令（模拟测试）
 
-### [DATA] 数据接入/对齐/校准
-- [ ] DATA-01 保持 AB 双源与校准脚本；输出对齐报告  
-  - TAG: inherit | OWNER: data | DUE: ____  
-  - ACCEPTANCE: `make data.qc` 生成报告且无 ERROR  
-  - OUT: output/calibration_report.md
-- [ ] DATA-02 ATAS/交易所分钟数据 schema 迭代至 V7，补 manifest 签名  
-  - TAG: modify | OWNER: data | DUE: ____  
-  - ACCEPTANCE: manifest 含 `schema_version=v7` 与导出批次元数据；QC 缺失率≤0.1%  
-  - OUT: data/raw/**, docs/DATA_PIPELINE.md
-- [ ] DATA-03 成本字典三档更新并联通仿真  
-  - TAG: inherit | OWNER: data | DUE: ____  
-  - ACCEPTANCE: 成本配置落入 `output/cost_profiles.json`，仿真读取成功  
-  - OUT: output/cost_profiles.json
+### [FEAT] 特征 / 观测（新增噪声观测四指标）
+- [ ] FEAT-01 负清晰度样本采样与 `noise_energy` 计算逻辑（clarity < τ 的方差能量）
+  - OUT: features/noise_metrics/compute_noise_energy.py
+  - ACCEPTANCE: 脚本提供函数 compute_noise_energy(clarity_series, low_threshold) 并通过简单单元样例
 
-### [FEAT] 特征（微观/宏观）
-- [ ] FEAT-01 微观特征口径统一（含 `bar_vpo_*`、cvd、volprofile）  
-  - TAG: modify | OWNER: feat | DUE: ____  
-  - ACCEPTANCE: `clusterer_config.features` 可复现实验列名；qc 报告无缺列  
-  - OUT: model/clusterer_dynamic/clusterer_config.yaml
-- [ ] FEAT-02 宏观慢因子沿用并声明为约束  
-  - TAG: inherit | OWNER: feat | DUE: ____  
-  - ACCEPTANCE: 因子列表与 `model/hmm_tvtp_adaptive/README.md` 对齐；滑窗再训脚本引用一致  
-  - OUT: model/hmm_tvtp_adaptive/config.yaml
+- [ ] FEAT-02 `drift_bandwidth`（原型向量一阶差分范数的标准差）
+  - OUT: features/noise_metrics/compute_drift_bandwidth.py
+  - ACCEPTANCE: 提供 compute_drift_bandwidth(proto_vectors) 并对示例 proto 序列给出合理数值
 
-### [CLST] clusterer_dynamic
-- [ ] CLST-01 在线聚类（GMM 或 IncPCA+kmeans；K=2；λ≈0.97）  
-  - TAG: new | OWNER: ml | DUE: ____  
-  - ACCEPTANCE: 产出 `labels_wt.parquet` 与 `cluster_artifacts.json`  
-  - OUT: model/clusterer_dynamic/
-- [ ] CLST-02 滚动窗口与标签对齐（Hungarian；label-switch 审计）  
-  - TAG: new | OWNER: ml | DUE: ____  
-  - ACCEPTANCE: 审计日志包含交换次数与一致性评分  
-  - OUT: output/cluster_alignment.log
-- [ ] CLST-03 `prototype_drift` 指标产出并接门控  
-  - TAG: new | OWNER: ml | DUE: ____  
-  - ACCEPTANCE: `validation/metrics_summary.json` 含 drift 指标；CONTROL 阈值读写正常  
-  - OUT: validation/metrics_summary.json
+- [ ] FEAT-03 `clarity_spectrum_power`（clarity 序列高频功率）
+  - OUT: features/noise_metrics/compute_clarity_spectrum.py
+  - ACCEPTANCE: 提供 compute_clarity_spectrum_power(clarity_series, hi_band)；若环境含 scipy 使用 Welch，否则回退 FFT
 
-### [TVTP] hmm_tvtp_adaptive
-- [ ] TVTP-01 用 A/B 标签 + 宏观因子训练，仅学习切换概率  
-  - TAG: modify | OWNER: ml | DUE: ____  
-  - ACCEPTANCE: `transition_prob.parquet` 产出且校准可运行  
-  - OUT: model/hmm_tvtp_adaptive/transition_prob.parquet
-- [ ] TVTP-02 校准指标（ECE/Brier）  
-  - TAG: new | OWNER: ml | DUE: ____  
-  - ACCEPTANCE: 指标小于 CONTROL 阈值  
-  - OUT: validation/metrics_summary.json
-- [ ] TVTP-03 推断输出 `transition_prob/clarity/abstain`  
-  - TAG: modify | OWNER: ml | DUE: ____  
-  - ACCEPTANCE: 推断接口返回三字段；低置信度触发 abstain  
-  - OUT: model/hmm_tvtp_adaptive/state_inference.py
+- [ ] FEAT-04 `adversarial_gap`（扰动 vs 原数据嵌入差，MSE 或马氏距离）
+  - OUT: features/noise_metrics/compute_adversarial_gap.py
+  - ACCEPTANCE: 提供 compute_adversarial_gap(embed_real, embed_noisy) 并支持 (N,D) 或 (D,) 输入
 
-### [DEC] 决策与执行
-- [ ] DEC-01 仅在 `transition_prob>τ` 时触发方向判断器；低置信度走 `abstain`  
-  - TAG: modify | OWNER: exec | DUE: ____  
-  - ACCEPTANCE: `dryrun` 日志显示触发逻辑  
-  - OUT: decision/engine.py
-- [ ] DEC-02 `clarity → position_size` 映射  
-  - TAG: new | OWNER: exec | DUE: ____  
-  - ACCEPTANCE: 映射曲线写入配置并被执行层引用  
+- [ ] FEAT-05 `stability_index` 计算：`clarity × (1 - noise_energy)`（可留校准表）
+  - OUT: model/stability_estimator.py 或合并到现有评估模块
+  - ACCEPTANCE: 提供稳定性计算例程并在 SCHEMA 示例中有输出字段 stability_index
+
+### [VAL] 验证与门控（新增 7.1 门检）
+- [ ] VAL-01 新增 YAML：`validation/noise_metrics.yaml`，含阈值与 gates：
+  ```yaml
+  thresholds:
+    stability_index: 0.60
+    noise_energy: 0.30
+    drift_bandwidth: auto    # 初始策略：历史 median + 1σ
+    clarity_spectrum_power: auto
+  gates:
+    - "stability_index > thresholds.stability_index"
+    - "noise_energy < thresholds.noise_energy"
+  reporting:
+    markdown: docs/VALIDATION.md
+    lookback_days: 14
+  ```
+  - OUT: validation/noise_metrics.yaml
+  - ACCEPTANCE: 文件存在且被 audit 脚本识别并用于门检
+
+- [ ] VAL-02 `VALIDATION.md` 汇总表新增列：
+      `noise_energy`, `drift_bandwidth`, `clarity_spectrum_power`, `stability_index`
+  - OUT: docs/VALIDATION.md
+  - ACCEPTANCE: docs/VALIDATION.md 前 30 行含占位表头及示例行
+
+- [ ] VAL-03 CI 门检对接（失败显示具体指标名与阈值）
+  - OUT: .github/workflows/ci.yml, validation/gates.py
+  - ACCEPTANCE: CI 运行时可调用 gates.py 并在校验失败时输出 human-readable 报告
+
+### [MODEL] 训练与校准（不改分支，仅评估/修正）
+- [ ] MODEL-01 Stability Estimator：将 `stability_index` 作为仓位修正项（不改变触发逻辑，仅影响权重）
+  - OUT: decision/engine.py（映射曲线或 lookup 校准表）
+  - ACCEPTANCE: dryrun 输出包含 base_position 与 stability_modifier 并能复现预期缩放
+
+- [ ] MODEL-02 校准（ECE / Brier）与 `stability_index` 联动审计
+  - OUT: validation/calibration_report.md
+  - ACCEPTANCE: 校准报告中列出 ECE/Brier 与 stability_index 的相关性与门检建议
+
+### [EXEC] 执行与成本
+- [ ] EXEC-01 仓位 = `position_base(clarity)` × `stability_modifier`（单调递增）
   - OUT: decision/engine.py, governance/CONTROL_switch_policy.yaml
+  - ACCEPTANCE: 回测/模拟任务显示仓位随 stability_index 的合理变化曲线
 
-### [VAL] 验证与门控
-- [ ] VAL-01 新增 `prototype_drift/ECE/Brier/abstain_rate/transition_hit_ratio`  
-  - TAG: new | OWNER: qa | DUE: ____  
-  - ACCEPTANCE: `VALIDATION.md` 汇总表含以上列  
-  - OUT: validation/VALIDATION.md
-- [ ] VAL-02 发布门检以“健康指标”为主  
-  - TAG: modify | OWNER: qa | DUE: ____  
-  - ACCEPTANCE: `make release` 读取 CONTROL 阈值并判定  
-  - OUT: validation/gates.py
+- [ ] EXEC-02 高噪声期强制冷却/降仓策略与日志
+  - OUT: execution/* （策略实现）、output/audits/*.md（审计记录）
+  - ACCEPTANCE: 高噪声事件写入审计日志（时间戳、阈值、触发原因、处理动作）
 
-### [CI] CI/发布
-- [ ] CI-01 CI 增加 schema 校验与指标门控  
-  - TAG: modify | OWNER: ops | DUE: ____  
-  - ACCEPTANCE: Actions 全绿；失败时输出具体指标名  
-  - OUT: .github/workflows/ci.yml
-- [ ] CI-02 四键签名流程沿用（产物哈希记录）  
-  - TAG: inherit | OWNER: ops | DUE: ____  
-  - ACCEPTANCE: 发布清单含哈希签名；审计追溯可重算  
-  - OUT: scripts/signing/
-
-### [DOC] 文档与迁移
-- [ ] DOC-01 收敛旧 TODO/ROADMAP 到本文件；旧文档入 `docs/_archive/`  
-  - TAG: modify | OWNER: docs | DUE: ____  
-  - ACCEPTANCE: 顶部列出来源与归档链接  
-  - OUT: docs/TODO_V7.md
-- [ ] DOC-02 更新 README 的“最小执行链”段落与指向  
-  - TAG: modify | OWNER: docs | DUE: ____  
-  - ACCEPTANCE: README 提及 V7 链路并链接 TODO  
+### [DOC] 文档与变更记录
+- [ ] DOC-01 README 的“最小执行链”与指向更新为 7.1
   - OUT: README.md
+- [ ] DOC-02 CHANGELOG 增补 7.1 项
+  - OUT: docs/CHANGELOG.md
+- [ ] DOC-03 本 TODO 文件抬头标注“V7.1 — Stability Unified”，并附来源（说明书章节锚点）
+  - OUT: docs/TODO_V7.md（本文件）
 
-## Backlog
-- [ ] 三态相关图表历史存档注记（不再投产）  
-  - TAG: backlog | OWNER: docs | DUE: ____
+## 验收标准（一页式）
+- 有文件：`features/noise_metrics/*`、`validation/noise_metrics.yaml`
+- 有字段：`governance/SCHEMA_model.json` 中 `signatures.schema_version == "v7.1"`, 并包含 `noise_energy`, `stability_index`
+- 有门检：`docs/VALIDATION.md` 含四指标列；validation 脚本能解释 gates 并能与 CI 联动
+- 有日志：输出 `output/audits/v7_1_audit.md` 的体检报告（若无历史数据，用样例跑通）
+- 有 PR：覆盖上述改动的分支名与 commit message 符合规范（见下）
 
-## Parking Lot
-- [ ] HSMM 方案研究（在 TVTP 稳定后再立项）  
-  - TAG: parking | OWNER: research | DUE: ____
+## 提交与分支策略（本任务板执行约定）
+- 分支：`feat/v7_1-stability-todo-sync`
+- commit 示例：`chore(todo): sync TODO to V7.1 stability framework and noise gates`
+- PR 标题示例：`chore(v7.1): sync TODO and add stability gating tasks`
+- PR 描述应包含：
+  - 变更清单（文件级别）与验收脚本输出（或 link 到 output/audits/v7_1_audit.md）
+  - 变更的治理影响点（schema 升级、CI gates 增补）
+
+## 附：可执行任务板（按优先级）
+P0（必须先完成）
+- GOV-01, GOV-04, FEAT-01, FEAT-02, VAL-01, DOC-02
+
+P1（次序并行）
+- FEAT-03, FEAT-04, FEAT-05, MODEL-01, VAL-02, EXEC-02
+
+P2（后续）
+- MODEL-02, VAL-03 (CI 集成), DOC-01, TODO 的测试覆盖
+
+## 附录：快速检查清单（验收时逐项打勾）
+- [ ] 分支已创建：`feat/v7_1-stability-todo-sync`
+- [ ] features/noise_metrics/* 四个脚本存在并含 self-test
+- [ ] validation/noise_metrics.yaml 存在且格式可读
+- [ ] governance/SCHEMA_model.json 包含 `schema_version==v7.1` 且包含 `noise_energy, stability_index`
+- [ ] docs/VALIDATION.md 包含四指标列头与占位示例
+- [ ] scripts/audit_v7_1.py 可运行并输出 output/audits/v7_1_audit.md
+- [ ] PR 已创建并附带审计报告（或运行日志）
+
+---
+Commit for this TODO update:
+- branch: `feat/v7_1-stability-todo-sync`
+- commit message: `chore(todo): sync TODO to V7.1 stability framework and noise gates`
+"""
