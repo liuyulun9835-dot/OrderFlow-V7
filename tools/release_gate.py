@@ -35,9 +35,15 @@ def _load_metrics() -> dict:
 
 def _resolve_verdict(metrics: dict) -> str:
     gate = metrics.get("gate") or {}
-    gate_status = gate.get("status") if isinstance(gate, dict) else None
+    gate_status = None
+    if isinstance(gate, dict):
+        raw_status = gate.get("status") or gate.get("result")
+        if isinstance(raw_status, str):
+            gate_status = raw_status.strip().lower()
     overall_status = metrics.get("overall_status")
-    verdict = (gate_status or overall_status or "fail").strip().lower()
+    if isinstance(overall_status, str):
+        overall_status = overall_status.strip().lower()
+    verdict = gate_status or overall_status or "fail"
     if verdict not in {"pass", "warn", "fail"}:
         return "fail"
     return verdict

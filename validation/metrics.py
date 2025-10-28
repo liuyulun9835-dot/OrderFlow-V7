@@ -9,7 +9,7 @@ import pandas as pd
 from model.hmm_tvtp_adaptive.train import _brier_score as compute_brier
 from model.hmm_tvtp_adaptive.train import _expected_calibration_error as compute_ece
 from validation.core.aggregator import aggregate as aggregate_metrics
-from validation.core.thresholds_loader import load_thresholds
+from validation.core.thresholds_loader import load_policy
 
 
 @dataclass
@@ -51,7 +51,9 @@ def _transition_hit_ratio(frame: pd.DataFrame, gate: float) -> float:
 
 
 def _load_control_thresholds(path: Path) -> Dict[str, Dict[str, Any]]:
-    return load_thresholds(path)
+    policy = load_policy(path)
+    thresholds = policy.get("thresholds") if isinstance(policy, dict) else None
+    return thresholds or {}
 
 
 def summarise(frame: pd.DataFrame, config: MetricConfig) -> Dict[str, float]:
@@ -134,7 +136,8 @@ def write_reports(
         DeprecationWarning,
         stacklevel=2,
     )
-    payload = aggregate_metrics(frame)
+    _ = frame  # kept for backward compatibility
+    payload = aggregate_metrics()
     return payload.get("metrics", {})
 
 
