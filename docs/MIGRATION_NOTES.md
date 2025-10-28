@@ -53,13 +53,27 @@ orderflow_v_6/
     └── src/
 ```
 
-## 数据侧迁移
+## 《数据侧迁移到 CDK》
 迁出日期：2025-10-28
 
-**说明**：此类逻辑由 CentralDataKitchen 统一实现，V7 仅保留 Data Loader 契约读取
+**说明**：数据清洗、对齐、校准均统一迁往 Central Data Kitchen，V7 仅保留 Data Loader 契约示例。迁出条目如下：
 
-### 移除的文件
-- `data/alignment/__init__.py`
-- `data/alignment/merge_to_features.py`
-- `data/alignment/sessions.py`
+| 模块 | 去向 | 迁移成本 |
+| --- | --- | --- |
+| `data/preprocessing/**` | CDK preprocessing service | M |
+| `data/calibration/**` | CDK calibration pipeline | M |
+| `data/alignment/**` | CDK feature alignment orchestrator | L |
+
+保留内容：`data/meta/`、`data/raw/.gitkeep` 作为契约示例。
+
+## 《Adapter 外移清单》
+迁出日期：2025-10-28
+
+**说明**：Adapter 层承担跨窗口、重计算逻辑，需迁往 CDK/Decision/Ops 后再纳入治理。
+
+| 模块 | 去向 | 迁移成本 |
+| --- | --- | --- |
+| `features/adapter/**` | CDK feature derivation modules | M |
+| `validation/adapter/**` | Ops validation toolkit | S |
+| `scripts/audit*.py` | Decision/Ops audit automation | S |
 

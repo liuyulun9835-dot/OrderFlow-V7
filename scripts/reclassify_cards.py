@@ -25,7 +25,10 @@ ORDER = [
 LAYER_RULES: List[Tuple[re.Pattern[str], str]] = [
     (re.compile(p, re.I), layer)
     for p, layer in [
-        (r"(数据|atas|manifest|preprocess|raw|alignment|features|calibration|watermark)", "Data"),
+        (
+            r"(数据|atas|manifest|preprocess|raw|alignment|features|calibration|watermark)",
+            "Data",
+        ),
         (r"(指标|因子|hmm|tvtp|hsmm|模型|state|regime)", "Model"),
         (r"(决策|decision|scoring|规则|structureddecisiontree)", "Decision"),
         (r"(执行|execution|撮合|routing|router|下单|成交)", "Execution"),
@@ -70,13 +73,19 @@ MODULE_MAP: Dict[str, str] = {
 
 PATH_REPLACEMENTS: List[Tuple[re.Pattern[str], str]] = [
     (re.compile(r"strategy_core/decision_tree/"), "decision/engine/"),
-    (re.compile(r"strategy_core/state_inference"), "model/hmm_tvpt_hsmm/state_inference"),
+    (
+        re.compile(r"strategy_core/state_inference"),
+        "model/hmm_tvpt_hsmm/state_inference",
+    ),
     (re.compile(r"strategy_core/scoring"), "decision/scoring"),
     (re.compile(r"(?<!model/)models/"), "model/artifacts/"),
     (re.compile(r"(?<!output/)results/"), "output/results/"),
     (re.compile(r"(?<!output/)qa/"), "output/qa/"),
     (re.compile(r"output/results/output"), "output/results"),
-    (re.compile(r"data/\{raw,staged,processed\}"), "data/{raw,preprocessing,processed}"),
+    (
+        re.compile(r"data/\{raw,staged,processed\}"),
+        "data/{raw,preprocessing,processed}",
+    ),
 ]
 
 CARD_PATTERN = re.compile(
@@ -160,7 +169,11 @@ def rebuild_document(original: str, items: Iterable[Tuple[str, int, str]]) -> st
         blocks = by_layer.get(layer, [])
         if not blocks:
             continue
-        ids = [re.search(r"### 卡片\s+(\d{3})", b).group(1) for b in blocks]
+        ids: List[str] = []
+        for block in blocks:
+            match = re.search(r"### 卡片\s+(\d{3})", block)
+            if match:
+                ids.append(match.group(1))
         parts.append(f"- **{layer}**：{', '.join(ids)}")
 
     for layer in ORDER:
@@ -196,7 +209,12 @@ def main(card_path: Path) -> None:
         updated_block = clean_block(updated_block)
         processed.append((layer, cid, updated_block))
 
-    processed.sort(key=lambda item: (ORDER.index(item[0]) if item[0] in ORDER else len(ORDER), item[1]))
+    processed.sort(
+        key=lambda item: (
+            ORDER.index(item[0]) if item[0] in ORDER else len(ORDER),
+            item[1],
+        )
+    )
 
     mapping_entries: List[Tuple[int, str, int]] = []
     for index, (layer, cid, block) in enumerate(processed, start=1):

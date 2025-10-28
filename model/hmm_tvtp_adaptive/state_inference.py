@@ -42,14 +42,22 @@ def _load_artifacts(path: Path) -> TrainingArtifacts:
 
 
 def _clarity_from_prob(prob: float) -> float:
-    entropy = -(prob * math.log(prob + 1e-8) + (1.0 - prob) * math.log(1.0 - prob + 1e-8))
+    entropy = -(
+        prob * math.log(prob + 1e-8) + (1.0 - prob) * math.log(1.0 - prob + 1e-8)
+    )
     max_entropy = math.log(2.0)
     return 1.0 - entropy / max_entropy
 
 
-def infer_row(features: Mapping[str, float], config: InferenceConfig, artifacts: TrainingArtifacts) -> InferenceOutput:
-    vector = np.array([float(features[col]) for col in config.feature_columns], dtype=float)
-    weights = np.array([artifacts.coefficients[col] for col in config.feature_columns], dtype=float)
+def infer_row(
+    features: Mapping[str, float], config: InferenceConfig, artifacts: TrainingArtifacts
+) -> InferenceOutput:
+    vector = np.array(
+        [float(features[col]) for col in config.feature_columns], dtype=float
+    )
+    weights = np.array(
+        [artifacts.coefficients[col] for col in config.feature_columns], dtype=float
+    )
     prob = float(_sigmoid(vector @ weights + artifacts.intercept))
     clarity = _clarity_from_prob(prob)
     abstain = prob < config.transition_gate or clarity < config.min_clarity
@@ -57,7 +65,9 @@ def infer_row(features: Mapping[str, float], config: InferenceConfig, artifacts:
         reason = "low_confidence"
     else:
         reason = "transition_prob_above_threshold"
-    return InferenceOutput(transition_prob=prob, clarity=clarity, abstain=abstain, reason=reason)
+    return InferenceOutput(
+        transition_prob=prob, clarity=clarity, abstain=abstain, reason=reason
+    )
 
 
 def run(frame: pd.DataFrame, config: InferenceConfig) -> pd.DataFrame:
@@ -65,12 +75,17 @@ def run(frame: pd.DataFrame, config: InferenceConfig) -> pd.DataFrame:
     outputs = []
     for _, row in frame.iterrows():
         outputs.append(infer_row(row, config, artifacts))
-    result = pd.DataFrame([{
-        "transition_prob": out.transition_prob,
-        "clarity": out.clarity,
-        "abstain": out.abstain,
-        "reason": out.reason,
-    } for out in outputs])
+    result = pd.DataFrame(
+        [
+            {
+                "transition_prob": out.transition_prob,
+                "clarity": out.clarity,
+                "abstain": out.abstain,
+                "reason": out.reason,
+            }
+            for out in outputs
+        ]
+    )
     return result
 
 

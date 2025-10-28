@@ -38,4 +38,6 @@ def predict_proba(snapshot: Mapping[str, float]) -> InferenceOutput:
     state = "trend" if score >= 0.5 else "balance"
     confidence = abs(score - 0.5) * 2.0
     transition_prob = score if state == "trend" else 1.0 - score
-    return InferenceOutput(state=state, confidence=confidence, transition_prob=transition_prob)
+    return InferenceOutput(
+        state=state, confidence=confidence, transition_prob=transition_prob
+    )

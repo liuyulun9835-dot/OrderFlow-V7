@@ -1,6 +1,8 @@
 """
 V7.1 noise metric — drift_bandwidth
 定义：原型向量（prototype）序列的一阶差分范数的标准差，衡量结构漂移的“带宽”（扩散范围）。
+
+# ADAPTER: planned to migrate to CDK
 输入：
     proto_vectors: np.ndarray, 形状 (T, D) 或 (T,)
 输出：
@@ -9,7 +11,9 @@ V7.1 noise metric — drift_bandwidth
     - 对差分序列 ||p_t - p_{t-1}|| 做 std，T<3 返回 0。
 """
 from __future__ import annotations
+
 import numpy as np
+
 
 def compute_drift_bandwidth(proto_vectors: np.ndarray) -> float:
     """

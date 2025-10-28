@@ -1,14 +1,15 @@
+import json
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Optional
-
-import json
+from typing import Any, Dict, Optional
 
 import pandas as pd
-import yaml
 
-from model.hmm_tvtp_adaptive.train import _expected_calibration_error as compute_ece
 from model.hmm_tvtp_adaptive.train import _brier_score as compute_brier
+from model.hmm_tvtp_adaptive.train import _expected_calibration_error as compute_ece
+from validation.core.aggregator import aggregate as aggregate_metrics
+from validation.core.thresholds_loader import load_thresholds
 
 
 @dataclass
@@ -49,11 +50,8 @@ def _transition_hit_ratio(frame: pd.DataFrame, gate: float) -> float:
     return float(hits)
 
 
-def _load_control_thresholds(path: Path) -> Dict[str, Dict[str, float]]:
-    if not path.exists():
-        return {}
-    raw = yaml.safe_load(path.read_text()) or {}
-    return raw.get("thresholds", {})
+def _load_control_thresholds(path: Path) -> Dict[str, Dict[str, Any]]:
+    return load_thresholds(path)
 
 
 def summarise(frame: pd.DataFrame, config: MetricConfig) -> Dict[str, float]:
@@ -78,54 +76,66 @@ def summarise(frame: pd.DataFrame, config: MetricConfig) -> Dict[str, float]:
     return metrics
 
 
-def _format_gate(metric: str, thresholds: Dict[str, Dict[str, float]]) -> str:
-    gate = thresholds.get(metric)
-    if gate is None:
+def _format_gate(metric: str, thresholds: Dict[str, Dict[str, Any]]) -> str:
+    gate_info = thresholds.get(metric)
+    if gate_info is None:
         return "-"
-    if isinstance(gate, dict):
-        if {"min", "max"} <= gate.keys():
-            return f"{gate['min']:.2f}–{gate['max']:.2f}"
-        if "min" in gate:
-            return f">= {gate['min']:.2f}"
-        if "max" in gate:
-            return f"<= {gate['max']:.2f}"
-        if "fail" in gate:
-            return f"<= {gate['fail']:.2f}"
-        if "gate" in gate:
-            return f">= {gate['gate']:.2f}"
-    if isinstance(gate, (int, float)):
-        return f"{gate:.2f}"
+    gate_value = gate_info.get("gate") if isinstance(gate_info, dict) else gate_info
+    warn_value = gate_info.get("warn") if isinstance(gate_info, dict) else None
+    fail_value = gate_info.get("fail") if isinstance(gate_info, dict) else None
+
+    if isinstance(gate_value, tuple) and len(gate_value) == 2:
+        lo, hi = gate_value
+        return f"{lo:.2f}–{hi:.2f}"
+    if isinstance(gate_value, (int, float)):
+        return f"{gate_value:.2f}"
+    if isinstance(fail_value, (int, float)):
+        return f"<= {fail_value:.2f}"
+    if isinstance(warn_value, (int, float)):
+        return f"warn {warn_value:.2f}"
     return "-"
 
 
-def _write_markdown(metrics: Dict[str, float], config: MetricConfig, thresholds: Dict[str, Dict[str, float]]) -> None:
-    lines = ["# VALIDATION — V7 Metrics", "", "| Metric | Value | Gate | Notes |", "| --- | --- | --- | --- |"]
+def _write_markdown(
+    metrics: Dict[str, float],
+    config: MetricConfig,
+    thresholds: Dict[str, Dict[str, float]],
+) -> None:
+    lines = [
+        "# VALIDATION — V7 Metrics",
+        "",
+        "| Metric | Value | Gate | Notes |",
+        "| --- | --- | --- | --- |",
+    ]
     notes = {
         "prototype_drift": "Scaled Euclidean drift of cluster centroids",
         "ece": "Expected calibration error of transition probability",
         "brier": "Brier score of transition probability",
         "abstain_rate": "Share of observations abstaining",
         "transition_hit_ratio": f"Trigger gate uses transition_prob >= {config.transition_gate:.2f}",
-        "count": "Sample size"
+        "count": "Sample size",
     }
     for key, value in metrics.items():
         display = f"{value:.4f}" if isinstance(value, float) else str(value)
-        lines.append(f"| {key} | {display} | {_format_gate(key, thresholds)} | {notes.get(key, '')} |")
+        lines.append(
+            f"| {key} | {display} | {_format_gate(key, thresholds)} | {notes.get(key, '')} |"
+        )
     lines.append("")
     lines.append("> Gates sourced from governance/CONTROL_switch_policy.yaml")
     config.metrics_markdown.parent.mkdir(parents=True, exist_ok=True)
     config.metrics_markdown.write_text("\n".join(lines))
 
 
-def write_reports(frame: pd.DataFrame, config: Optional[MetricConfig] = None) -> Dict[str, float]:
-    cfg = config or MetricConfig()
-    metrics = summarise(frame, cfg)
-    thresholds = _load_control_thresholds(cfg.control_yaml)
-    payload = {"metrics": metrics, "thresholds": thresholds}
-    cfg.metrics_json.parent.mkdir(parents=True, exist_ok=True)
-    cfg.metrics_json.write_text(json.dumps(payload, indent=2, sort_keys=True))
-    _write_markdown(metrics, cfg, thresholds)
-    return metrics
+def write_reports(
+    frame: pd.DataFrame, config: Optional[MetricConfig] = None
+) -> Dict[str, float]:
+    warnings.warn(
+        "validation.metrics.write_reports is deprecated; use validation.core.aggregator.aggregate",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    payload = aggregate_metrics(frame)
+    return payload.get("metrics", {})
 
 
 __all__ = ["MetricConfig", "summarise", "write_reports"]
