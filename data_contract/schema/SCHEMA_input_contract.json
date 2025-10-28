@@ -1,0 +1,3 @@
+{
+  "required": ["schema_version","snapshot_id","symbol","tz","row_count","start_ts_utc","end_ts_utc","feature_set","hash"]
+}

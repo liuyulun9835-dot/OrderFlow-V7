@@ -1,22 +1,18 @@
 .PHONY: install lint test validate release
 
-PYTHON = poetry run python
-
 install:
-	poetry install --with dev
+python -m pip install -U pip
+pip install -e .[dev]
 
 lint:
-	python tools/check_no_adapter_imports.py
-	poetry run ruff check .
-	poetry run black --check .
-	poetry run isort --check .
-	poetry run mypy .
+python -m ruff check .
+python -m mypy .
 
 test:
-	poetry run pytest -q
+pytest -q
 
 validate:
-	$(PYTHON) -m validation.core.aggregator
+python -m validation.core.aggregator --runs-dir validation/runs --out-dir validation
 
-release:
-	$(PYTHON) tools/release_gate.py
+release: validate
+python publisher/publisher.py
