@@ -12,6 +12,8 @@
 
 # OrderFlow — V7 Migration Draft (qianyi)
 
+**架构说明**：V7 仅保留模型层，决策与执行外置。
+
 OrderFlow V7 聚焦“滚动可分性(A/B) + 自适应 TVTP(只学切换) + clarity/abstain + 漂移与校准门控”，在保持 V6 治理底座的同时，补齐面向执行的最小闭环。当前分支整合了治理契约、模型骨架、验证与 CI 的首版迁移草案。
 
 ## 最小执行链（V7 草案）

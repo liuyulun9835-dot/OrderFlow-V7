@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "orderflow-v6"
+name = "orderflow-v7"
 version = "0.1.0"
 description = "OrderFlow V6 quantitative trading strategy"
 authors = ["Your Name <you@example.com>"]
