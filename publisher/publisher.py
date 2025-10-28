@@ -45,7 +45,7 @@ def _derive_gate_status() -> str:
             return "UNKNOWN"
         gate = payload.get("gate")
         if isinstance(gate, dict):
-            status = gate.get("status")
+            status = gate.get("status") or gate.get("result")
             if isinstance(status, str):
                 return status.upper()
         status = payload.get("overall_status")

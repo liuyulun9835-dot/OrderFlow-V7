@@ -17,10 +17,10 @@ V7 仅暴露模型训练与验证相关接口；数据落地、决策执行、�
 
 ## 阈值来源
 - 单一真值源：`governance/CONTROL_switch_policy.yaml`
-  - `validation/core/thresholds_loader.load_thresholds()` 负责读取与标准化。
+  - `validation/core/thresholds_loader.load_policy()` 负责读取策略。
   - 任何影子文件（`validation/thresholds.yaml`、`validation/costs.yaml`）仅保留提示注释。
 
 ## 健康 / Degradation 策略
-- `validation.core.aggregator` 产出的 `statuses` 字段用于 `make release` 门检。
-- 若 `overall_status=fail` 或单项 `fail`，发布流程立即停止并记录原因。
+- `validation.core.aggregator` 产出的 `gate.result` 用于 `make release` 门检，`gate.checks` 记录逐项对比。
+- 若 `gate.result=fail`，发布流程立即停止并记录原因。
 - Adapter 命名空间中的额外校验需迁往 CDK/Decision/Ops 后再纳入治理。

@@ -1,46 +1,59 @@
 {
-  "gate": {
-    "evaluated_at": "2025-10-28T21:22:50.316334+00:00",
-    "reason": "all metrics within policy",
-    "source": "validation.core.aggregator",
-    "status": "PASS"
-  },
+  "policy_version": "v7.1",
   "metrics": {
-    "adversarial_gap": 0.00022002839370478252,
-    "clarity_spectrum_power": 6.548494273320854e-12,
-    "count": 128,
-    "drift_bandwidth": 0.002586327092036433,
-    "noise_energy": 0.0
+    "clarity": {
+      "spectrum_power": 0.7
+    },
+    "noise": {
+      "energy": 0.35
+    },
+    "drift": {
+      "bandwidth": 0.22
+    },
+    "adversarial": {
+      "gap": 0.15
+    }
+  },
+  "gate": {
+    "mode": "strict",
+    "checks": [
+      {
+        "name": "clarity_min",
+        "ok": true,
+        "actual": 0.7,
+        "op": ">=",
+        "value": 0.62,
+        "severity": "fail"
+      },
+      {
+        "name": "noise_energy_max",
+        "ok": true,
+        "actual": 0.35,
+        "op": "<=",
+        "value": 0.4,
+        "severity": "fail"
+      },
+      {
+        "name": "drift_bandwidth_max",
+        "ok": true,
+        "actual": 0.22,
+        "op": "<=",
+        "value": 0.25,
+        "severity": "warn"
+      },
+      {
+        "name": "adversarial_gap_max",
+        "ok": true,
+        "actual": 0.15,
+        "op": "<=",
+        "value": 0.18,
+        "severity": "fail"
+      }
+    ],
+    "result": "pass",
+    "fail_count": 0,
+    "warn_count": 0
   },
   "overall_status": "pass",
-  "statuses": {
-    "adversarial_gap": "pass",
-    "clarity_spectrum_power": "pass",
-    "count": "pass",
-    "drift_bandwidth": "pass",
-    "noise_energy": "pass"
-  },
-  "thresholds": {
-    "adversarial_gap": {
-      "fail": 0.25,
-      "gate": null,
-      "warn": 0.15
-    },
-    "clarity_spectrum_power": {
-      "fail": 0.01,
-      "gate": null,
-      "warn": 0.005
-    },
-    "count": {},
-    "drift_bandwidth": {
-      "fail": 0.12,
-      "gate": null,
-      "warn": 0.08
-    },
-    "noise_energy": {
-      "fail": null,
-      "gate": 0.3,
-      "warn": null
-    }
-  }
+  "timestamp_utc": "2025-10-28T23:05:14.928718+00:00"
 }
