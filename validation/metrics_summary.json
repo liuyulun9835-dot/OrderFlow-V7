@@ -1,4 +1,10 @@
 {
+  "gate": {
+    "evaluated_at": "2025-10-28T21:22:50.316334+00:00",
+    "reason": "all metrics within policy",
+    "source": "validation.core.aggregator",
+    "status": "PASS"
+  },
   "metrics": {
     "adversarial_gap": 0.00022002839370478252,
     "clarity_spectrum_power": 6.548494273320854e-12,
