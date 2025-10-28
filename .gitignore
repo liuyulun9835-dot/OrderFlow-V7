@@ -29,3 +29,11 @@ build/
 dist/
 *.egg-info/
 
+# IDE and build artifacts (V6 legacy)
+/orderflow_v_6/integrations/atas/indicators/.vs/
+/orderflow_v_6/integrations/atas/indicators/**/bin/
+/orderflow_v_6/integrations/atas/indicators/**/obj/
+*.bin
+*.user
+*.suo
+
