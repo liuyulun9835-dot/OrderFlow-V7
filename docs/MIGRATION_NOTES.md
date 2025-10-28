@@ -53,3 +53,13 @@ orderflow_v_6/
     └── src/
 ```
 
+## 数据侧迁移
+迁出日期：2025-10-28
+
+**说明**：此类逻辑由 CentralDataKitchen 统一实现，V7 仅保留 Data Loader 契约读取
+
+### 移除的文件
+- `data/alignment/__init__.py`
+- `data/alignment/merge_to_features.py`
+- `data/alignment/sessions.py`
+
