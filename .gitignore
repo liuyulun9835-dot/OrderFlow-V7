@@ -19,6 +19,9 @@
 !/results/README.md
 !/results/.gitkeep
 
+# Build artifacts
+/output/**
+
 # Python cache
 __pycache__/
 *.py[cod]
