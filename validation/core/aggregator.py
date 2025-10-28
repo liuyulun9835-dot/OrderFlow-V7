@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, Tuple
 
@@ -178,11 +179,30 @@ def aggregate(frame: pd.DataFrame | None = None) -> Dict[str, Any]:
     statuses["count"] = "pass"
     overall = _reduce_status(statuses.values())
 
+    evaluated_at = datetime.now(timezone.utc).isoformat()
+    breaches = [key for key, status in statuses.items() if status == "fail"]
+    warnings = [key for key, status in statuses.items() if status == "warn"]
+    if breaches:
+        gate_status = "FAIL"
+        gate_reason = ", ".join(sorted(breaches))
+    elif warnings:
+        gate_status = "WARN"
+        gate_reason = ", ".join(sorted(warnings))
+    else:
+        gate_status = "PASS"
+        gate_reason = "all metrics within policy"
+
     payload = {
         "metrics": metrics,
         "statuses": statuses,
         "thresholds": relevant_thresholds,
         "overall_status": overall,
+        "gate": {
+            "status": gate_status,
+            "reason": gate_reason,
+            "evaluated_at": evaluated_at,
+            "source": "validation.core.aggregator",
+        },
     }
     _write_metrics_json(payload)
     _write_metrics_markdown(metrics, statuses, relevant_thresholds, overall)
