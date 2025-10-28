@@ -6,7 +6,6 @@ used to assess stability of model predictions during uncertain states.
 """
 
 import numpy as np
-from typing import Union
 
 
 def compute_noise_energy(
