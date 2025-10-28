@@ -1,6 +1,7 @@
-schema_version: v7.0
+schema_version: v7.1
 description: >-
   Control gates for adaptive transition policy with clarity/abstain signalling.
+  Extended in v7.1 with stability gate metrics.
 thresholds:
   transition_prob:
     gate: 0.65
@@ -22,6 +23,26 @@ thresholds:
     max: 0.25
   transition_hit_ratio:
     min: 0.60
+  # V7.1 stability gate metrics
+  stability_index:
+    threshold: 0.60
+    description: "Overall stability index for model release"
+  noise_energy:
+    threshold: 0.30
+    description: "Maximum noise energy in low clarity intervals"
+  drift_bandwidth:
+    warn: 0.08
+    fail: 0.12
+    description: "Bandwidth proxy for prototype drift"
+  clarity_spectrum_power:
+    baseline: 0.001
+    warn: 0.005
+    fail: 0.010
+    description: "High-frequency power in clarity spectrum"
+  adversarial_gap:
+    warn: 0.15
+    fail: 0.25
+    description: "Robustness to input perturbations"
 position_curve:
   clarity_breakpoints: [0.0, 0.45, 0.6, 0.75, 0.9, 1.0]
   position_scale: [0.0, 0.1, 0.3, 0.6, 0.85, 1.0]
@@ -31,5 +52,6 @@ abstain_policy:
   clarity_gate: 0.45
   drift_gate: 0.15
 signatures:
-  last_reviewed: 2025-10-26
+  last_reviewed: 2025-10-28
   reviewer: risk-committee
+  version: v7.1

@@ -1,3 +1,15 @@
+# OrderFlow — V7.1 with Stability Gates
+
+**Version 7.1 Update (2025-10-28)**: New stability gate metrics added for enhanced operational validation.
+
+## What's New in V7.1
+- **4 New Stability Metrics**: noise_energy, drift_bandwidth, clarity_spectrum_power, adversarial_gap
+- **Enhanced Governance**: New validation schemas and rules (20+ validation rules)
+- **Multi-level Thresholds**: baseline/warn/fail thresholds for fine-grained quality control
+- **Comprehensive Documentation**: Updated VALIDATION.md with examples and interpretation guides
+
+---
+
 # OrderFlow — V7 Migration Draft (qianyi)
 
 OrderFlow V7 聚焦“滚动可分性(A/B) + 自适应 TVTP(只学切换) + clarity/abstain + 漂移与校准门控”，在保持 V6 治理底座的同时，补齐面向执行的最小闭环。当前分支整合了治理契约、模型骨架、验证与 CI 的首版迁移草案。
@@ -14,14 +26,18 @@ OrderFlow V7 聚焦“滚动可分性(A/B) + 自适应 TVTP(只学切换) + clar
 
 ## 关键更新
 - **治理契约**：`SCHEMA_model.json`、`SCHEMA_decision.json` 增补 `clusterer_config/clarity/abstain/prototype_drift` 字段；`RULES_library.yaml` 与 `CONTROL_switch_policy.yaml` 引入新门控与低置信度处理。
+- **V7.1 稳定性门控**：新增 `SCHEMA_validation.json` 和 `RULES_validation.yaml` 定义稳定性指标；4 个新的指标脚本 `validation/compute_*.py`；集中化阈值管理 `validation/thresholds.yaml`。
 - **模型骨架**：新增 `model/clusterer_dynamic`（在线聚类 + 标签对齐 + prototype_drift）与 `model/hmm_tvtp_adaptive`（A/B 切换 Logistic + clarity/abstain 推断）。
 - **决策层**：`decision/engine.py` 仅在 `transition_prob>τ` 时触发方向判断器，clarity→position，低置信度直接 abstain。
 - **验证与 CI**：`validation/metrics.py` 汇总核心指标；CI 流水线增加治理 schema 校验、最小链路跑通、指标门检与产物签名。
 
 ## 文档总览
 - [docs/TODO_V7.md](docs/TODO_V7.md)：V7 Canonical Task Board（合并自 V6 TODO/日志）。
+- [docs/TODO_V7_1.md](docs/TODO_V7_1.md)：**V7.1 新增** - 稳定性门控集成任务清单。
+- [CHANGELOG.md](CHANGELOG.md)：**V7.1 新增** - 版本更新日志。
+- [validation/VALIDATION.md](validation/VALIDATION.md)：验证指标详解与稳定性门控逻辑（V7.1 更新）。
 - [docs/MIGRATION_V6_TO_V7.md](docs/MIGRATION_V6_TO_V7.md)：迁移对照、路径映射与操作步骤。
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)：分层结构、I/O 契约与门控。
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)：分层结构、I/O 契约与门控（V7.1 更新）。
 - [docs/DATA_PIPELINE.md](docs/DATA_PIPELINE.md)：AB 数据、微观/宏观特征与校准口径。
 
 ## 目录结构（V7 草案）

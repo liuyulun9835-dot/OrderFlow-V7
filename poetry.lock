@@ -1159,6 +1159,7 @@ files = [
 numpy = [
     {version = ">=1.22.4", markers = "python_version < \"3.11\""},
     {version = ">=1.23.2", markers = "python_version == \"3.11\""},
+    {version = ">=1.26.0", markers = "python_version >= \"3.12\""},
 ]
 python-dateutil = ">=2.8.2"
 pytz = ">=2020.1"
@@ -2078,7 +2079,7 @@ description = "Fundamental algorithms for scientific computing in Python"
 optional = false
 python-versions = ">=3.11"
 groups = ["main"]
-markers = "python_version == \"3.11\""
+markers = "python_version >= \"3.11\""
 files = [
     {file = "scipy-1.16.2-cp311-cp311-macosx_10_14_x86_64.whl", hash = "sha256:6ab88ea43a57da1af33292ebd04b417e8e2eaf9d5aa05700be8d6e1b6501cd92"},
     {file = "scipy-1.16.2-cp311-cp311-macosx_12_0_arm64.whl", hash = "sha256:c95e96c7305c96ede73a7389f46ccd6c659c4da5ef1b2789466baeaed3622b6e"},
@@ -2472,5 +2473,5 @@ analytics = ["polars"]
 
 [metadata]
 lock-version = "2.1"
-python-versions = ">=3.10,<3.12"
-content-hash = "a3b58bdd1705dbbdc70419285f8b5165642d14945c99f8434baad6a1956c866d"
+python-versions = ">=3.10,<3.13"
+content-hash = "8da9989baf0ffe2084e6f32d27d8b387edf2d6b52647a4f57e147d70e2a98a95"

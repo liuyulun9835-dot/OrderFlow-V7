@@ -1,0 +1,195 @@
+{
+  "schema_version": "v7.1",
+  "_compat": {
+    "notes": "V7.1 introduces stability gate metrics including noise energy, drift bandwidth, clarity spectrum power, and adversarial gap"
+  },
+  "validation_framework": {
+    "version": "7.1",
+    "metrics_categories": [
+      "stability",
+      "drift",
+      "clarity",
+      "robustness",
+      "calibration",
+      "performance"
+    ]
+  },
+  "required_metrics": {
+    "stability_index": {
+      "type": "float",
+      "range": [0.0, 1.0],
+      "threshold": 0.60,
+      "gate_type": "fail_below",
+      "critical": true,
+      "description": "Overall stability index combining multiple stability signals"
+    },
+    "noise_energy": {
+      "type": "float",
+      "range": [0.0, 1.0],
+      "threshold": 0.30,
+      "gate_type": "fail_above",
+      "critical": true,
+      "description": "Normalized variance-energy metric for low clarity intervals"
+    },
+    "prototype_drift": {
+      "type": "float",
+      "range": [0.0, null],
+      "warn": 0.12,
+      "fail": 0.15,
+      "gate_type": "warn_fail",
+      "critical": true,
+      "description": "Scaled Euclidean drift of cluster centroids"
+    },
+    "drift_bandwidth": {
+      "type": "float",
+      "range": [0.0, null],
+      "warn": 0.08,
+      "fail": 0.12,
+      "gate_type": "warn_fail",
+      "critical": false,
+      "description": "Bandwidth proxy using first-order differences of prototype vectors"
+    },
+    "clarity_spectrum_power": {
+      "type": "float",
+      "range": [0.0, null],
+      "baseline": 0.001,
+      "warn": 0.005,
+      "fail": 0.010,
+      "gate_type": "warn_fail",
+      "critical": false,
+      "description": "High-frequency power spectrum from clarity signal using Welch's method"
+    },
+    "adversarial_gap": {
+      "type": "float",
+      "range": [0.0, null],
+      "warn": 0.15,
+      "fail": 0.25,
+      "gate_type": "warn_fail",
+      "critical": false,
+      "description": "Mean squared distance between real and noisy embeddings"
+    },
+    "ece": {
+      "type": "float",
+      "range": [0.0, 1.0],
+      "warn": 0.06,
+      "fail": 0.08,
+      "gate_type": "warn_fail",
+      "critical": true,
+      "description": "Expected calibration error of transition probability"
+    },
+    "brier": {
+      "type": "float",
+      "range": [0.0, 1.0],
+      "warn": 0.16,
+      "fail": 0.18,
+      "gate_type": "warn_fail",
+      "critical": true,
+      "description": "Brier score of transition probability"
+    },
+    "abstain_rate": {
+      "type": "float",
+      "range": [0.0, 1.0],
+      "min": 0.10,
+      "max": 0.25,
+      "gate_type": "range",
+      "critical": false,
+      "description": "Share of observations abstaining from decisions"
+    },
+    "transition_hit_ratio": {
+      "type": "float",
+      "range": [0.0, 1.0],
+      "min": 0.60,
+      "gate_type": "min_only",
+      "critical": false,
+      "description": "Hit ratio for transition predictions above gate threshold"
+    }
+  },
+  "computation_requirements": {
+    "noise_energy": {
+      "inputs": ["clarity", "predictions"],
+      "parameters": {
+        "clarity_threshold": 0.55
+      },
+      "script": "validation/compute_noise_energy.py"
+    },
+    "drift_bandwidth": {
+      "inputs": ["prototype_history"],
+      "parameters": {
+        "sampling_rate": null
+      },
+      "script": "validation/compute_drift_bandwidth.py"
+    },
+    "clarity_spectrum_power": {
+      "inputs": ["clarity_timeseries"],
+      "parameters": {
+        "sampling_rate": 1.0,
+        "frequency_band": null
+      },
+      "script": "validation/compute_clarity_spectrum_power.py"
+    },
+    "adversarial_gap": {
+      "inputs": ["embeddings"],
+      "parameters": {
+        "noise_scale": 0.1,
+        "noise_type": "gaussian"
+      },
+      "script": "validation/compute_adversarial_gap.py"
+    }
+  },
+  "gate_policies": {
+    "fail_below": {
+      "description": "Metric must be above threshold",
+      "action": "block_release"
+    },
+    "fail_above": {
+      "description": "Metric must be below threshold",
+      "action": "block_release"
+    },
+    "warn_fail": {
+      "description": "Two-level threshold with warning and failure",
+      "actions": {
+        "warn": "log_warning",
+        "fail": "block_release"
+      }
+    },
+    "range": {
+      "description": "Metric must be within specified range",
+      "action": "warn_if_outside"
+    },
+    "min_only": {
+      "description": "Metric must meet minimum threshold",
+      "action": "warn_if_below"
+    }
+  },
+  "reporting": {
+    "output_formats": ["json", "markdown", "yaml"],
+    "required_fields": [
+      "metric_name",
+      "value",
+      "threshold",
+      "status",
+      "timestamp"
+    ],
+    "status_values": ["pass", "warn", "fail"],
+    "include_metadata": true
+  },
+  "validation_pipeline": {
+    "stages": [
+      "compute_metrics",
+      "evaluate_gates",
+      "generate_report",
+      "update_documentation"
+    ],
+    "failure_handling": {
+      "critical_failures": "block_release",
+      "warning_failures": "allow_with_review",
+      "info_failures": "log_only"
+    }
+  },
+  "signatures": {
+    "schema_version": "v7.1",
+    "created": "2025-10-28",
+    "author": "stability-committee",
+    "validation_hash": "pending"
+  }
+}
