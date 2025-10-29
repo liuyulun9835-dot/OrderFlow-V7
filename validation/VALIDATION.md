@@ -6,7 +6,7 @@
 
 | name | op | value | actual | severity | ok |
 |---|---:|---:|---:|---|---|
-| clarity_min | >= | 0.62 | 0.7000 | fail | true |
-| noise_energy_max | <= | 0.4 | 0.3500 | fail | true |
-| drift_bandwidth_max | <= | 0.25 | 0.2200 | warn | true |
-| adversarial_gap_max | <= | 0.18 | 0.1500 | fail | true |
+| clarity_min | >= | 0.62 | 0.700000 | fail | true |
+| noise_energy_max | <= | 0.4 | 0.350000 | fail | true |
+| drift_bandwidth_max | <= | 0.25 | 0.220000 | warn | true |
+| adversarial_gap_max | <= | 0.18 | 0.150000 | fail | true |
