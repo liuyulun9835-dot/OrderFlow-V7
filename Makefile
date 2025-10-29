@@ -2,7 +2,7 @@
 
 install:
 	python -m pip install -U pip
-	pip install -e .[dev]
+	pip install -e '.[dev]'
 
 lint:
 	python -m ruff check .
